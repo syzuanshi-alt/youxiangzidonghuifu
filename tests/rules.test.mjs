@@ -3632,14 +3632,22 @@ try {
   const defaultEmailAIStore = createDefaultEmailAIStore();
   assert.ok(Array.isArray(defaultEmailAIStore.agentSkills));
 	  assert.deepEqual(defaultEmailAIStore.agentSkills.map((skill) => skill.key), [
+	    'normalize_email_context',
 	    'translate_global_language',
-	    'classify_email',
+	    'detect_customer_intent_detail',
+	    'detect_customer_emotion',
+	    'classify_email_risk',
 	    'retrieve_knowledge',
+	    'score_knowledge_confidence',
+	    'extract_missing_fields',
 	    'draft_reply',
-	    'review_risk',
+	    'polish_reply_tone',
+	    'check_commitment_risk',
+	    'decide_auto_action',
 	    'human_feedback',
 	  ]);
 	  assert.ok(defaultEmailAIStore.agentSkills.find((skill) => skill.key === 'draft_reply').notes.includes('同语种回复'));
+	  assert.ok(defaultEmailAIStore.agentSkills.find((skill) => skill.key === 'check_commitment_risk').notes.includes('退款'));
 	  assert.equal(defaultEmailAIStore.agentPipeline.enabled, true);
 	  assert.equal(defaultEmailAIStore.agentPipeline.traceEnabled, true);
 	  assert.ok(defaultEmailAIStore.riskRules.some((rule) => rule.id === 'risk-high-faq-aftersale-watch'));
@@ -3665,6 +3673,40 @@ try {
   assert.equal(mockConfig.version.status, 'mock');
   assert.ok(mockConfig.modelProviders.some((provider) => provider.providerKey === 'local_mock'));
 
+  const legacySkillRoot = mkdtempSync(join(tmpdir(), 'email-ai-legacy-skills-'));
+  try {
+    const legacySkillRepository = createEmailAIStoreRepository({ rootDir: legacySkillRoot });
+    await legacySkillRepository.updateStore((store) => ({
+      ...store,
+      agentSkills: [
+        {
+          id: 'skill-classify-email',
+          key: 'classify_email',
+          label: '旧邮件分类',
+          enabled: true,
+          order: 20,
+          required: true,
+          failurePolicy: 'fail_closed',
+        },
+        {
+          id: 'skill-custom-extra',
+          key: 'custom_extra_skill',
+          label: '自定义扩展 Skill',
+          enabled: true,
+          order: 140,
+          required: false,
+          failurePolicy: 'skip_optional',
+        },
+      ],
+    }));
+    const legacySkillStore = await legacySkillRepository.readStore();
+    assert.equal(legacySkillStore.agentSkills.some((skill) => skill.key === 'classify_email'), false);
+    assert.equal(legacySkillStore.agentSkills.some((skill) => skill.key === 'classify_email_risk'), true);
+    assert.equal(legacySkillStore.agentSkills.some((skill) => skill.key === 'custom_extra_skill'), true);
+  } finally {
+    rmSync(legacySkillRoot, { recursive: true, force: true });
+  }
+
   const lowAIResult = await processEmailWithAI({
     senderEmail: 'buyer-ai-low@example.test',
     subject: 'Product material question',
@@ -3677,9 +3719,13 @@ try {
 	  assert.equal(lowAIResult.reply.tone, 'polite');
 	  assert.equal(lowAIResult.customerLanguage.code, 'en');
 	  assert.ok(Array.isArray(lowAIResult.agentTrace));
+	  assert.ok(lowAIResult.agentTrace.some((step) => step.skillKey === 'normalize_email_context'));
 	  assert.ok(lowAIResult.agentTrace.some((step) => step.skillKey === 'translate_global_language'));
-	  assert.ok(lowAIResult.agentTrace.some((step) => step.skillKey === 'classify_email'));
-	  assert.ok(lowAIResult.agentTrace.some((step) => step.skillKey === 'review_risk'));
+	  assert.ok(lowAIResult.agentTrace.some((step) => step.skillKey === 'detect_customer_intent_detail'));
+	  assert.ok(lowAIResult.agentTrace.some((step) => step.skillKey === 'score_knowledge_confidence'));
+	  assert.ok(lowAIResult.agentTrace.some((step) => step.skillKey === 'decide_auto_action'));
+	  assert.equal(lowAIResult.intent.primaryIntent, 'pre_sale_product_question');
+	  assert.equal(lowAIResult.knowledgeConfidence.level, 'medium');
 
 	  const taxFAQAIResult = await processEmailWithAI({
 	    senderEmail: 'buyer-ai-tax@example.test',
@@ -3727,6 +3773,15 @@ try {
       sender: 'buyer-ai-auto-low@example.test',
       subject: 'Product material question',
     }, autoSendLowAIResult).action, 'auto_reply');
+
+    const autoSendRefundResult = await processEmailWithAI({
+      senderEmail: 'buyer-ai-auto-refund@example.test',
+      subject: 'Refund request',
+      body: 'I want a refund for my order.',
+      source: 'email_auto_reply_workbench',
+    }, { repository: autoSendPolicyRepository });
+    assert.equal(autoSendRefundResult.risk.level, 'high');
+    assert.notEqual(autoSendRefundResult.finalAction, 'auto_send_allowed');
   } finally {
     rmSync(autoSendPolicyRoot, { recursive: true, force: true });
   }
@@ -3749,6 +3804,10 @@ try {
 	  assert.equal(highAIResult.risk.level, 'high');
 	  assert.equal(highAIResult.safety.needHumanReview, true);
 	  assert.ok(['human_review', 'blocked'].includes(highAIResult.finalAction));
+	  assert.equal(highAIResult.intent.primaryIntent, 'refund');
+	  assert.equal(highAIResult.emotion.emotionLevel, 'threatening');
+	  assert.equal(highAIResult.commitmentRisk.blocked, false);
+	  assert.ok(highAIResult.decisionReasons.some((reason) => /高风险|human/i.test(reason)));
 
 	  const qualityFAQAIResult = await processEmailWithAI({
 	    senderEmail: 'buyer-ai-quality@example.test',

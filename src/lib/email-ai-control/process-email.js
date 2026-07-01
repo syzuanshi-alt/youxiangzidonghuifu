@@ -115,7 +115,7 @@ export async function processEmailWithAI(emailPayload = {}, {
       blocked: false,
       reasons: ['未完成输出安全审核，默认交由人工确认。'],
     };
-    const finalAction = finalActionFromResult({
+    const finalAction = context.finalAction || finalActionFromResult({
       spam,
       risk,
       safety,
@@ -138,13 +138,23 @@ export async function processEmailWithAI(emailPayload = {}, {
         matchedRules: risk.matchedRules || [],
       },
       knowledgeBaseRefs: knowledge.refs || [],
+      intent: context.intent || null,
+      emotion: context.emotion || null,
+      knowledgeConfidence: context.knowledgeConfidence || null,
+      missingFields: context.missingFields || null,
       reply,
+      commitmentRisk: context.commitmentRisk || {
+        blocked: false,
+        reasons: [],
+        matchedPatterns: [],
+      },
       safety: {
         needHumanReview: safety.needHumanReview,
         blocked: safety.blocked,
         reasons: safety.reasons,
       },
       finalAction,
+      decisionReasons: context.decisionReasons || [],
       model: modelSummary(config, context.replyProvider),
       agentTrace,
     };

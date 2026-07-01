@@ -23,6 +23,28 @@ function clone(value) {
   return JSON.parse(JSON.stringify(value));
 }
 
+function mergeDefaultAgentSkills(agentSkills = [], defaultSkills = []) {
+  const existing = Array.isArray(agentSkills) ? agentSkills : [];
+  const byKey = new Map(existing.map((skill) => [skill.key, skill]));
+  const defaultKeys = new Set(defaultSkills.map((skill) => skill.key));
+  const deprecatedDefaultKeys = new Set(['classify_email', 'review_risk']);
+  const mergedDefaults = defaultSkills.map((defaultSkill) => {
+    const existingSkill = byKey.get(defaultSkill.key) || {};
+    return {
+      ...defaultSkill,
+      ...existingSkill,
+      id: existingSkill.id || defaultSkill.id,
+      key: defaultSkill.key,
+      order: defaultSkill.order,
+      required: defaultSkill.required,
+      failurePolicy: defaultSkill.failurePolicy,
+      notes: existingSkill.notes || defaultSkill.notes,
+    };
+  });
+  const customSkills = existing.filter((skill) => !defaultKeys.has(skill.key) && !deprecatedDefaultKeys.has(skill.key));
+  return [...mergedDefaults, ...customSkills];
+}
+
 function ensureStoreShape(store) {
   const defaults = createDefaultEmailAIStore();
   return {
@@ -34,7 +56,7 @@ function ensureStoreShape(store) {
     knowledgeBase: Array.isArray(store?.knowledgeBase) ? store.knowledgeBase : defaults.knowledgeBase,
     promptTemplates: Array.isArray(store?.promptTemplates) ? store.promptTemplates : defaults.promptTemplates,
     outputSafetyRules: Array.isArray(store?.outputSafetyRules) ? store.outputSafetyRules : defaults.outputSafetyRules,
-    agentSkills: Array.isArray(store?.agentSkills) ? store.agentSkills : defaults.agentSkills,
+    agentSkills: mergeDefaultAgentSkills(store?.agentSkills, defaults.agentSkills),
     agentPipeline: {
       ...defaults.agentPipeline,
       ...(store?.agentPipeline || {}),

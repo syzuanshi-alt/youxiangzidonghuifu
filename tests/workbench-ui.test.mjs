@@ -288,6 +288,28 @@ async function installApiRoutes(page, capturedActions) {
                 failurePolicy: 'fail_closed',
                 notes: '',
               },
+              {
+                id: 'skill-check-commitment-risk',
+                key: 'check_commitment_risk',
+                label: '承诺与责任风险复查',
+                description: '专门复查生成内容中的承诺和责任风险。',
+                enabled: true,
+                order: 110,
+                required: true,
+                failurePolicy: 'fail_closed',
+                notes: '发现退款、补发、赔偿、到货时间、责任承认、平台处理结果时必须阻断自动发送并转人工。',
+              },
+              {
+                id: 'skill-decide-auto-action',
+                key: 'decide_auto_action',
+                label: '自动处理资格判定',
+                description: '综合风险、知识库置信度、缺失字段和安全复查输出最终动作。',
+                enabled: true,
+                order: 120,
+                required: true,
+                failurePolicy: 'fail_closed',
+                notes: '默认不开放自动发送；只有低风险且所有 gate 通过才允许自动发送候选。',
+              },
             ],
           },
         }),
@@ -470,6 +492,9 @@ try {
   await waitForText(page, 'Skills 编排');
   await page.locator('[data-test-email-ai-control-root] [data-tab="skills"]').click();
   await waitForText(page, '全球语言自动翻译');
+  await waitForText(page, '承诺与责任风险复查');
+  await waitForText(page, '自动处理资格判定');
+  await waitForText(page, '退款、补发、赔偿');
   await waitForText(page, '执行链路预览');
 
   assert.deepEqual(pageErrors, []);

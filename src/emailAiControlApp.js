@@ -360,7 +360,7 @@ function renderSkills() {
         `).join('')}
       </div>
     </div>
-    ${table(['顺序', 'Skill', 'key', '必需', '失败策略', '状态', '操作'], items.map((item) => `
+    ${table(['顺序', 'Skill', 'key', '必需', '失败策略', '状态', '审核边界', '操作'], items.map((item) => `
       <tr>
         <td>${escapeHtml(item.order ?? '')}</td>
         <td>${escapeHtml(item.label || '')}</td>
@@ -368,6 +368,7 @@ function renderSkills() {
         <td>${item.required ? '是' : '否'}</td>
         <td>${escapeHtml(item.failurePolicy || 'fail_closed')}</td>
         <td>${enabledPill(item.enabled)}</td>
+        <td>${escapeHtml(item.notes || item.description || '')}</td>
         <td>${rowActions('agent-skills', item)}</td>
       </tr>
     `), '暂无 Skills 配置。')}

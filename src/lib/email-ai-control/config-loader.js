@@ -1,9 +1,32 @@
 import {
+  DEFAULT_AGENT_SKILLS,
   DEFAULT_AGENT_PIPELINE,
   DEFAULT_STRATEGY_CONFIG,
   createDefaultEmailAIStore,
 } from './default-config.js';
 import { createEmailAIStoreRepository } from './store-repository.js';
+
+function mergeDefaultAgentSkills(agentSkills = []) {
+  const existing = Array.isArray(agentSkills) ? agentSkills : [];
+  const byKey = new Map(existing.map((skill) => [skill.key, skill]));
+  const defaultKeys = new Set(DEFAULT_AGENT_SKILLS.map((skill) => skill.key));
+  const deprecatedDefaultKeys = new Set(['classify_email', 'review_risk']);
+  const mergedDefaults = DEFAULT_AGENT_SKILLS.map((defaultSkill) => {
+    const existingSkill = byKey.get(defaultSkill.key) || {};
+    return {
+      ...defaultSkill,
+      ...existingSkill,
+      id: existingSkill.id || defaultSkill.id,
+      key: defaultSkill.key,
+      order: defaultSkill.order,
+      required: defaultSkill.required,
+      failurePolicy: defaultSkill.failurePolicy,
+      notes: existingSkill.notes || defaultSkill.notes,
+    };
+  });
+  const customSkills = existing.filter((skill) => !defaultKeys.has(skill.key) && !deprecatedDefaultKeys.has(skill.key));
+  return [...mergedDefaults, ...customSkills];
+}
 
 function configFromStore(store, version) {
   return {
@@ -14,7 +37,7 @@ function configFromStore(store, version) {
     knowledgeBase: store.knowledgeBase || [],
     promptTemplates: store.promptTemplates || [],
     outputSafetyRules: store.outputSafetyRules || [],
-    agentSkills: store.agentSkills || [],
+    agentSkills: mergeDefaultAgentSkills(store.agentSkills),
     agentPipeline: {
       ...DEFAULT_AGENT_PIPELINE,
       ...(store.agentPipeline || {}),
@@ -35,7 +58,7 @@ function configFromPublishedVersion(version) {
     knowledgeBase: version.knowledgeBaseSnapshot || [],
     promptTemplates: version.promptTemplatesSnapshot || [],
     outputSafetyRules: version.outputSafetyRulesSnapshot || [],
-    agentSkills: version.agentSkillsSnapshot || [],
+    agentSkills: mergeDefaultAgentSkills(version.agentSkillsSnapshot),
     agentPipeline: {
       ...DEFAULT_AGENT_PIPELINE,
       ...(version.agentPipelineSnapshot || {}),
