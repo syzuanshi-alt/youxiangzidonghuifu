@@ -7,6 +7,8 @@
     "test": "node tests/rules.test.mjs",
     "dev": "python3 -m http.server 5174",
     "dev:api": "node server/feishuApiServer.mjs",
+    "install:workbench-agent": "node scripts/installWorkbenchLaunchAgent.mjs",
+    "install:api-agent": "node scripts/installFeishuApiLaunchAgent.mjs",
     "export:boss": "node scripts/exportBossDashboardSnapshot.mjs",
     "smoke:feishu": "node scripts/feishuReadSmokeTest.mjs"
   }
