@@ -637,6 +637,47 @@ function buildProcessingStatusFromAuditEvent(event = {}) {
   return null;
 }
 
+function processingStatusKeysFromAuditEvent(event = {}) {
+  return {
+    directKeys: [
+      event.mailId,
+      event.messageId,
+      event.result?.messageId,
+      event.result?.message_id,
+    ].filter(Boolean).map((key) => String(key)),
+    threadKeys: [
+      event.threadId,
+      event.result?.threadId,
+      event.result?.thread_id,
+    ].filter(Boolean).map((key) => `thread:${key}`),
+  };
+}
+
+function parseProcessingTimestamp(value = '') {
+  if (!value) return NaN;
+
+  const text = String(value).trim();
+  if (/^\d{12,}$/.test(text)) {
+    const numericTime = Number(text);
+    return Number.isFinite(numericTime) ? numericTime : NaN;
+  }
+
+  const normalized = text.includes('T') ? text : text.replace(' ', 'T');
+  const parsed = Date.parse(normalized);
+  return Number.isFinite(parsed) ? parsed : NaN;
+}
+
+function canApplyThreadProcessingStatus(status = {}, mail = {}) {
+  if (!status || status.status !== 'completed') return false;
+
+  const completedAt = parseProcessingTimestamp(status.completedAt);
+  const mailReceivedAt = parseProcessingTimestamp(mail.receivedAt || mail.received_at || mail.internal_date || mail.create_time || '');
+
+  return Number.isFinite(completedAt)
+    && Number.isFinite(mailReceivedAt)
+    && mailReceivedAt <= completedAt + 60_000;
+}
+
 async function loadMailProcessingStatusMap(rootDir) {
   const auditPath = resolve(rootDir, '.runtime/feishu-actions.ndjson');
   const statusMap = new Map();
@@ -659,11 +700,19 @@ async function loadMailProcessingStatusMap(rootDir) {
       const status = buildProcessingStatusFromAuditEvent(event);
       if (!status) return;
 
-      [event.mailId, event.messageId]
-        .filter(Boolean)
-        .forEach((mailId) => {
-          statusMap.set(String(mailId), status);
+      const keys = processingStatusKeysFromAuditEvent(event);
+      keys.directKeys.forEach((mailId) => {
+        statusMap.set(mailId, {
+          ...status,
+          matchScope: 'direct',
         });
+      });
+      keys.threadKeys.forEach((threadKey) => {
+        statusMap.set(threadKey, {
+          ...status,
+          matchScope: 'thread',
+        });
+      });
     } catch {
       // Ignore malformed local audit lines; they should not stop the workbench.
     }
@@ -1686,8 +1735,11 @@ export function createFeishuApiServer({
     const riskOverrides = await loadRiskOverrideMap(resolvedRoot);
     const mails = Array.isArray(payload.mails)
       ? payload.mails.map((mail) => {
-        const processingStatus = statusMap.get(String(mail.id))
+        const directProcessingStatus = statusMap.get(String(mail.id))
           || statusMap.get(String(mail.messageId || mail.message_id || ''));
+        const threadProcessingStatus = statusMap.get(`thread:${mail.threadId || mail.thread_id || ''}`);
+        const processingStatus = directProcessingStatus
+          || (canApplyThreadProcessingStatus(threadProcessingStatus, mail) ? threadProcessingStatus : null);
         const riskOverride = findRiskOverride(riskOverrides, mail);
 
         return {
@@ -1702,7 +1754,9 @@ export function createFeishuApiServer({
       ...payload,
       mails,
       processingStatusSummary: {
-        completedCount: [...statusMap.values()].filter((status) => status.status === 'completed').length,
+        completedCount: Array.isArray(mails)
+          ? mails.filter((mail) => mail.processingStatus?.status === 'completed').length
+          : 0,
       },
     };
   }

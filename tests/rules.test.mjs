@@ -3153,11 +3153,12 @@ const auditStateRootDir = mkdtempSync(join(tmpdir(), 'feishu-audit-state-test-')
 try {
   mkdirSync(join(auditStateRootDir, '.runtime'), { recursive: true });
   writeFileSync(join(auditStateRootDir, '.runtime/feishu-actions.ndjson'), `${JSON.stringify({
-    createdAt: '2026-06-13T00:00:00.000Z',
+    createdAt: '2026-06-13T03:00:00.000Z',
     action: 'send',
     actor: 'scheduled-auto-process',
     mailId: 'om_real_test_004',
     messageId: 'om_real_test_004',
+    threadId: 'omt_real_test_004',
     subject: '我想查询订单',
     risk: 'low',
     allowed: true,
@@ -3210,13 +3211,106 @@ try {
         };
       }
 
+      if (url.includes('/messages/renamed-om-real-test-004')) {
+        return {
+          json: async () => ({
+            code: 0,
+            msg: 'ok',
+            data: {
+              message: {
+                message_id: 'renamed-om-real-test-004',
+                thread_id: 'omt_real_test_004',
+                subject: '我想查询订单',
+                head_from: {
+                  mail_address: 'buyer044@example.test',
+                },
+                internal_date: '2026-06-13T10:01:00+08:00',
+                body_plain_text: '同一封原始邮件同步后消息 ID 变化，但时间早于完成时间。',
+                label_ids: ['INBOX'],
+              },
+            },
+          }),
+        };
+      }
+
+      if (url.includes('/messages/sent-om-real-test-004')) {
+        return {
+          json: async () => ({
+            code: 0,
+            msg: 'ok',
+            data: {
+              message: {
+                message_id: 'sent-om-real-test-004',
+                thread_id: 'thread-sent-004',
+                subject: 'Re: 我想查询订单',
+                head_from: {
+                  mail_address: 'buyer044@example.test',
+                },
+                internal_date: '2026-06-13T10:05:00+08:00',
+                body_plain_text: '客户回复同一线程，消息 ID 已变化。',
+                label_ids: ['INBOX'],
+              },
+            },
+          }),
+        };
+      }
+
+      if (url.includes('/messages/new-reply-om-real-test-004')) {
+        return {
+          json: async () => ({
+            code: 0,
+            msg: 'ok',
+            data: {
+              message: {
+                message_id: 'new-reply-om-real-test-004',
+                thread_id: 'omt_real_test_004',
+                subject: 'Re: 我想查询订单',
+                head_from: {
+                  mail_address: 'buyer044@example.test',
+                },
+                internal_date: '2026-06-13T12:30:00+08:00',
+                body_plain_text: '客户在完成回复后又发来新问题，不能被误判为已完成。',
+                label_ids: ['INBOX'],
+              },
+            },
+          }),
+        };
+      }
+
+      if (url.includes('/messages/unknown-time-thread-004')) {
+        return {
+          json: async () => ({
+            code: 0,
+            msg: 'ok',
+            data: {
+              message: {
+                message_id: 'unknown-time-thread-004',
+                thread_id: 'omt_real_test_004',
+                subject: 'Re: 我想查询订单',
+                head_from: {
+                  mail_address: 'buyer044@example.test',
+                },
+                body_plain_text: '缺少可解析时间时，不能只因为线程相同就标记完成。',
+                label_ids: ['INBOX'],
+              },
+            },
+          }),
+        };
+      }
+
       return {
         json: async () => ({
           code: 0,
           data: {
             has_more: false,
             page_token: '',
-            items: ['om_real_test_004'],
+            items: [
+              'om_real_test_004',
+              'renamed-om-real-test-004',
+              'sent-om-real-test-004',
+              'new-reply-om-real-test-004',
+              'unknown-time-thread-004',
+            ],
           },
         }),
       };
@@ -3225,9 +3319,22 @@ try {
     const response = await fetch(`${baseUrl}/api/feishu/mail/messages?all=true&page_size=20`);
     const payload = await response.json();
     assert.equal(response.status, 200);
-    assert.equal(payload.mails[0].processingStatus.status, 'completed');
-    assert.equal(payload.mails[0].processingStatus.action, 'send');
-    assert.equal(payload.mails[0].processingStatus.label, '已自动回复');
+    const originalMail = payload.mails.find((mail) => mail.id === 'om_real_test_004');
+    const renamedOriginalMail = payload.mails.find((mail) => mail.id === 'renamed-om-real-test-004');
+    const sentThreadMail = payload.mails.find((mail) => mail.id === 'sent-om-real-test-004');
+    const newReplyMail = payload.mails.find((mail) => mail.id === 'new-reply-om-real-test-004');
+    const unknownTimeThreadMail = payload.mails.find((mail) => mail.id === 'unknown-time-thread-004');
+    assert.equal(originalMail.processingStatus.status, 'completed');
+    assert.equal(originalMail.processingStatus.action, 'send');
+    assert.equal(originalMail.processingStatus.label, '已自动回复');
+    assert.equal(renamedOriginalMail.processingStatus.status, 'completed');
+    assert.equal(renamedOriginalMail.processingStatus.action, 'send');
+    assert.equal(sentThreadMail.processingStatus.status, 'completed');
+    assert.equal(sentThreadMail.processingStatus.action, 'send');
+    assert.equal(sentThreadMail.processingStatus.label, '已自动回复');
+    assert.equal(newReplyMail.processingStatus, undefined);
+    assert.equal(unknownTimeThreadMail.processingStatus, undefined);
+    assert.equal(payload.processingStatusSummary.completedCount, 3);
   });
 } finally {
   rmSync(auditStateRootDir, { recursive: true, force: true });

@@ -55,6 +55,21 @@ const fixtureMails = [
     bodyText: 'The requested file has been sent. Please confirm received.',
   },
   {
+    id: 'MAIL-COMPLETED',
+    messageId: 'MSG-COMPLETED',
+    subject: '已完成历史邮件',
+    sender: 'done@example.test',
+    receivedAt: '2026-06-30 09:25',
+    summary: '这封邮件已经由服务端历史状态标记完成。',
+    bodyText: 'This message has already been handled.',
+    processingStatus: {
+      status: 'completed',
+      action: 'send',
+      label: '已自动回复',
+      completedAt: '2026-06-30T01:26:00.000Z',
+    },
+  },
+  {
     id: 'MAIL-SPAM',
     messageId: 'MSG-SPAM',
     subject: 'SEO backlinks 广告外链推广',
@@ -72,7 +87,7 @@ const writeStatus = {
   highRiskSendEnabled: true,
   realSendEnabled: true,
   realArchiveEnabled: true,
-  autoProcessEnabled: true,
+  autoProcessEnabled: false,
   autoSendLowRiskEnabled: true,
   autoArchiveSpamEnabled: true,
   customerReplyOriginalSenderEnabled: true,
@@ -401,8 +416,13 @@ try {
 
   await page.goto(server.origin, { waitUntil: 'domcontentloaded' });
   await waitForText(page, '数据总览');
-  await page.locator('[data-close-overview]').click();
+
+  await page.locator('.overview-stat-card.completed').click();
   await waitForText(page, '邮箱');
+  await waitForText(page, '已完成历史邮件');
+  const completedHistoryRow = page.locator('.mail-row').filter({ hasText: '已完成历史邮件' }).first();
+  await completedHistoryRow.locator('.status-pill-completed').waitFor({ state: 'visible', timeout: 2_000 });
+  assert.match(await completedHistoryRow.innerText(), /已自动回复/);
 
   await page.locator('.mailbox-alert-item[data-mailbox-filter="urgent"]').click();
   await waitForText(page, '我要取消订单并退款');
