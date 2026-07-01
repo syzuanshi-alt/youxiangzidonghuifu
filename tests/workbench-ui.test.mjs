@@ -78,6 +78,55 @@ const fixtureMails = [
     summary: '广告推广 seo backlinks unsubscribe。',
     bodyText: 'SEO backlinks promotion, unsubscribe anytime.',
   },
+  {
+    id: 'MAIL-EN-PLACEHOLDER',
+    messageId: 'MSG-EN-PLACEHOLDER',
+    subject: 'Inquiry About My Order Status',
+    sender: 'english-placeholder@example.test',
+    receivedAt: '2026-06-30 09:40',
+    summary: '英文订单状态邮件包含中文占位符。',
+    bodyText: [
+      'Subject: Inquiry About My Order Status Dear Support Team, Hope you’re doing well.',
+      'I am writing to check the latest progress of my order.',
+      'I placed the purchase a few days ago but haven’t received any update about shipment or delivery yet.',
+      'My order number is: [填写订单号]',
+      'Purchase date: [下单日期]',
+      'Item purchased: [商品名称]',
+      'Could you please help me confirm the current status of this order?',
+      'If the goods have been dispatched, kindly send me the tracking number as soon as possible.',
+      'Should there be any delay or problem with my order, please inform me in detail so I can arrange accordingly.',
+      'Looking forward to your prompt reply.',
+      'Best regards, [你的姓名] [联系方式]',
+    ].join(' '),
+  },
+  {
+    id: 'MAIL-JA-METADATA',
+    messageId: 'MSG-JA-METADATA',
+    subject: 'Japanese metadata order status',
+    sender: 'japanese-metadata@example.test',
+    receivedAt: '2026-06-30 09:45',
+    summary: '日文订单状态邮件后面混入测试链路元数据。',
+    bodyText: [
+      '件名： ご注文状況の確認のお願い サポートチーム 各位 お世話になっております。',
+      '数日前に商品を注文いたしましたが、発送・配送に関する連絡が届いておりません。',
+      'このためメールにて注文状況の確認をお願いいたします。',
+      '注文番号: 【注文番号を記入】 注文日: 【注文日】 購入商品: 【商品名】',
+      '現在の注文の状況をご確認の上、ご返事をいただけますでしょうか。',
+      'もし発送済みの場合は、追跡番号を送付してください。',
+      'また、遅延や不具合が発生している場合は、詳しい状況をご説明いただけますと幸いです。',
+      'お手数をおかけし恐れ入りますが、早急なご回答をお待ちしております。',
+      '> 发件人：赵允雨 <ayu@vitashinelab.com> > 时间：2026年6月13日 (周六) 12:51 > 主题：【工作台联调】ayu 邮箱真实发送测试 > 收件人：<kinglihua@vitashinelab.com> > 本邮件用于确认新应用授权、发送权限和工作台后端链路是否已经打通。',
+    ].join(' '),
+  },
+  {
+    id: 'MAIL-PT-DAMAGED',
+    messageId: 'MSG-PT-DAMAGED',
+    subject: '[TEST][PT][Devolução] Pedido VS-75209 chegou com problema',
+    sender: 'portuguese-damaged@example.test',
+    receivedAt: '2026-06-30 09:50',
+    summary: '葡语退货/换货邮件。',
+    bodyText: 'E-MAIL DE TESTE - solicitação de devolução. Olá, Recebi o pedido VS-75209, mas a embalagem chegou danificada. Quero saber quais são os próximos passos para devolver ou trocar o produto. Atenciosamente, Beatriz Almeida',
+  },
 ];
 
 const writeStatus = {
@@ -227,6 +276,7 @@ async function installApiRoutes(page, capturedActions) {
                 ? '已收到您的资料，我们会尽快查看。'
                 : 'Thanks for your message. We will check the order status and get back to you.',
             internalSuggestion: '高风险邮件需要人工核对后处理。',
+            translationZh: isMedium || subject.includes('[PT]') ? '客户在询问订单信息或订单状态。' : '',
             customerLanguage: { code: subject.includes('Order status') ? 'en' : 'zh', label: '测试语言' },
           },
           model: {
@@ -429,6 +479,38 @@ try {
 
   await page.locator('button[data-mailbox-filter="medium_risk"]').click();
   await waitForText(page, 'Order status SH-TEST-1001');
+  await page.locator('[data-mailbox-search]').fill('Inquiry About My Order Status');
+  await clickMailRow(page, 'Inquiry About My Order Status');
+  const englishPlaceholderOriginalBlock = await page.locator('.mail-original-block').innerText();
+  const englishPlaceholderTranslationBlock = await page.locator('.mail-translation-block').innerText();
+  assert.match(englishPlaceholderOriginalBlock, /英语/);
+  assert.match(englishPlaceholderTranslationBlock, /订单.*最新进展|订单状态/);
+  assert.match(englishPlaceholderTranslationBlock, /发货|配送|物流|追踪/);
+  assert.match(englishPlaceholderTranslationBlock, /下单日期/);
+  assert.match(englishPlaceholderTranslationBlock, /购买商品/);
+  assert.doesNotMatch(englishPlaceholderTranslationBlock, /原文已是中文|Subject:|Dear Support Team|Purchase date|Item purchased|Could you please/);
+
+  await page.locator('[data-mailbox-search]').fill('Japanese metadata');
+  await clickMailRow(page, 'Japanese metadata order status');
+  const japaneseMetadataOriginalBlock = await page.locator('.mail-original-block').innerText();
+  const japaneseMetadataTranslationBlock = await page.locator('.mail-translation-block').innerText();
+  assert.match(japaneseMetadataOriginalBlock, /日语/);
+  assert.doesNotMatch(japaneseMetadataOriginalBlock, /发件人|测试时间|本邮件用于|ayu@|kinglihua/);
+  assert.match(japaneseMetadataTranslationBlock, /订单状态|订单的当前状态/);
+  assert.match(japaneseMetadataTranslationBlock, /发货|配送|追踪/);
+  assert.doesNotMatch(japaneseMetadataTranslationBlock, /原文已是中文|現在の注文|ご返事|発生|詳しい状況|发件人|测试时间|本邮件用于|ayu@|kinglihua/);
+
+  await page.locator('[data-mailbox-search]').fill('Devolução');
+  await clickMailRow(page, 'Pedido VS-75209 chegou com problema');
+  const portugueseOriginalBlock = await page.locator('.mail-original-block').innerText();
+  const portugueseTranslationBlock = await page.locator('.mail-translation-block').innerText();
+  assert.match(portugueseOriginalBlock, /葡萄牙语/);
+  assert.match(portugueseTranslationBlock, /订单 VS-75209/);
+  assert.match(portugueseTranslationBlock, /包装|包裹/);
+  assert.match(portugueseTranslationBlock, /损坏/);
+  assert.match(portugueseTranslationBlock, /退货|换货/);
+  assert.doesNotMatch(portugueseTranslationBlock, /原文已是中文|客户在询问订单信息或订单状态|solicitação|devolução/);
+  await page.locator('[data-mailbox-search]').fill('');
 
   await page.locator('button[data-mailbox-filter="low_risk"]').click();
   await waitForText(page, '已发送资料，请查收');
@@ -452,6 +534,12 @@ try {
   await page.locator('[data-mailbox-search]').fill('');
   await page.locator('button[data-mailbox-filter="medium_risk"]').click();
   await clickMailRow(page, 'Order status SH-TEST-1001');
+  await waitForText(page, '客户原文');
+  await waitForText(page, 'Could you check my order status SH-TEST-1001?');
+  const mediumTranslationBlock = await page.locator('.mail-translation-block').innerText();
+  assert.match(mediumTranslationBlock, /订单状态/);
+  assert.match(mediumTranslationBlock, /SH-TEST-1001/);
+  assert.doesNotMatch(mediumTranslationBlock, /客户想查订单状态，需要人工确认/);
   await page.locator('input[name="riskOverride"][value="medium"]').check();
   await page.locator('[data-confirm-risk-override]').click();
   await page.waitForFunction(() => {

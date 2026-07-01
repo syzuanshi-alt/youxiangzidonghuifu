@@ -79,3 +79,9 @@ export function isHighRiskMail(mail = {}) {
 export function isSpamMail(mail = {}) {
   return getMailRiskState(mail).spam;
 }
+
+export function shouldReplaceStableRiskSnapshot(existing = null, next = {}, riskOverride = null) {
+  if (!existing) return true;
+  if (riskOverride) return true;
+  return false;
+}

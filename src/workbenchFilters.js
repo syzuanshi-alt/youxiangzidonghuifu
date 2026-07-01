@@ -1,4 +1,8 @@
 import { getMailRiskState } from './riskState.js';
+import {
+  hasFailedProcessingStatus,
+  isCompletedProcessingStatus,
+} from './processingStatus.js';
 
 export const WORKBENCH_FILTERS = [
   { key: 'all', label: '全部邮件', tone: '' },
@@ -37,15 +41,11 @@ export function normalizeWorkbenchFilter(filterKey) {
 }
 
 function hasCompletedProcessing(mail = {}) {
-  if (mail.processingStatus?.status === 'completed') return true;
-  if (['sent', 'archived', 'completed'].includes(mail.processingStatus?.status)) return true;
-  if (mail.processingStatus?.completed) return true;
-  return false;
+  return isCompletedProcessingStatus(mail.processingStatus);
 }
 
 function hasFailedProcessing(mail = {}) {
-  return ['failed', 'blocked'].includes(mail.processingStatus?.status)
-    || mail.processingStatus?.failed;
+  return hasFailedProcessingStatus(mail.processingStatus);
 }
 
 export function getWorkbenchProcessingStatus(mail = {}) {

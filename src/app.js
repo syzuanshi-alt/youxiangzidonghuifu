@@ -50,7 +50,11 @@ import {
 import {
   getMailRiskState,
   normalizeMailRiskSnapshot,
+  shouldReplaceStableRiskSnapshot,
 } from './riskState.js';
+import {
+  chooseProcessingStatus,
+} from './processingStatus.js';
 import {
   buildQueueNavigationItems,
   buildWorkbenchFilterMetrics,
@@ -223,6 +227,8 @@ async function processMailWithEmailAI(mail) {
       senderEmail: mail.sender || mail.from?.email || '',
       subject: mail.subject || '',
       body: mail.bodyText || mail.summary || '',
+      bodyText: mail.bodyText || '',
+      summary: mail.summary || '',
       orderInfo: mail.orderInfo || {},
       customerHistory: mail.customerHistory || {},
       source: 'email_auto_reply_workbench',
@@ -301,23 +307,6 @@ const defaultKnowledgeItems = [
   },
 ];
 
-const defaultRiskRules = [
-  {
-    id: 'RULE-REFUND-HIGH',
-    label: '退款/退货高风险',
-    risk: 'high',
-    keywords: '退款,退货,refund,return',
-    enabled: true,
-  },
-  {
-    id: 'RULE-SPAM-PROMO',
-    label: '推广垃圾邮件',
-    risk: 'spam',
-    keywords: 'seo,backlinks,推广,广告,unsubscribe',
-    enabled: true,
-  },
-];
-
 let feishuMessages = [];
 let mails = [];
 let selectedId = '';
@@ -332,7 +321,6 @@ let riskOverrides = loadRiskOverrides();
 let riskSnapshots = loadRiskSnapshots();
 let manualArchiveSelections = loadManualArchiveSelections();
 let knowledgeItems = loadKnowledgeItems();
-let riskRules = loadRiskRules();
 let activeFilter = 'all';
 let mailboxSearchQuery = '';
 let mailboxContactPanelOpen = false;
@@ -590,18 +578,6 @@ function loadKnowledgeItems() {
 
 function saveKnowledgeItems() {
   localStorage.setItem('feishu-mail-knowledge-items', JSON.stringify(knowledgeItems));
-}
-
-function loadRiskRules() {
-  try {
-    return JSON.parse(localStorage.getItem('feishu-mail-risk-rules') || JSON.stringify(defaultRiskRules));
-  } catch {
-    return [...defaultRiskRules];
-  }
-}
-
-function saveRiskRules() {
-  localStorage.setItem('feishu-mail-risk-rules', JSON.stringify(riskRules));
 }
 
 function loadWorkbenchAccounts() {
@@ -1197,34 +1173,8 @@ function matchesKeywords(text, keywords) {
   return splitKeywords(keywords).some((keyword) => text.includes(keyword));
 }
 
-function findMatchingRiskRule(mail) {
-  const text = mailSearchText(mail);
-  return riskRules.find((rule) => rule.enabled !== false && matchesKeywords(text, rule.keywords));
-}
-
-function applyRiskRule(mail) {
-  if (mail.riskOverride) return mail;
-  const rule = findMatchingRiskRule(mail);
-  if (!rule) return mail;
-
-  return applyRiskOverrideToMail(mail, {
-    risk: rule.risk,
-    note: `命中风险规则库：${rule.label}`,
-    updatedAt: new Date().toISOString(),
-  }, { agentConfig });
-}
-
 function riskSnapshotKey(mail = {}) {
   return String(mail.messageId || mail.id || mail.threadKey || '').trim();
-}
-
-function riskStabilityRank(risk = '') {
-  return {
-    spam: 0,
-    low: 1,
-    medium: 2,
-    high: 3,
-  }[risk] || 0;
 }
 
 function buildRiskSnapshot(mail = {}, source = 'auto') {
@@ -1248,13 +1198,6 @@ function buildRiskSnapshot(mail = {}, source = 'auto') {
   };
 }
 
-function shouldReplaceRiskSnapshot(existing = null, next = {}, riskOverride = null) {
-  if (!existing) return true;
-  if (riskOverride) return true;
-  if (existing.source === 'manual') return false;
-  return riskStabilityRank(next.risk) > riskStabilityRank(existing.risk);
-}
-
 function applyStableRiskSnapshot(mail = {}, riskOverride = null) {
   const key = riskSnapshotKey(mail);
   if (!key) return mail;
@@ -1268,7 +1211,7 @@ function applyStableRiskSnapshot(mail = {}, riskOverride = null) {
       }
     : null;
 
-  if (shouldReplaceRiskSnapshot(normalizedExisting, nextSnapshot, riskOverride)) {
+  if (shouldReplaceStableRiskSnapshot(normalizedExisting, nextSnapshot, riskOverride)) {
     riskSnapshots = {
       ...riskSnapshots,
       [key]: nextSnapshot,
@@ -1419,7 +1362,7 @@ function mergeMailProcessingStatus(mail) {
   return {
     ...mail,
     ...(riskOverride ? { riskOverride } : {}),
-    processingStatus: localStatus || serverStatus || mail.processingStatus || null,
+    processingStatus: chooseProcessingStatus(localStatus, serverStatus, mail.processingStatus),
   };
 }
 
@@ -2163,9 +2106,9 @@ function classifiedMails() {
     const riskOverride = riskOverrides[mail.id] || riskOverrides[mail.messageId] || mail.riskOverride || null;
     const baseClassified = mail.aiResult
       ? applyRiskOverrideToMail(mapEmailAIResultToWorkbenchMail(mail, mail.aiResult), riskOverride, { agentConfig })
-      : applyKnowledgeCandidate(applyRiskRule(applyRiskOverrideToMail(classifyMail(mail, {
+      : applyKnowledgeCandidate(applyRiskOverrideToMail(classifyMail(mail, {
         agentConfig,
-      }), riskOverride, { agentConfig })));
+      }), riskOverride, { agentConfig }));
     const stableClassified = applyStableRiskSnapshot(applyCandidateSelection(baseClassified), riskOverride);
     const classifiedMail = applyManualArchiveSelectionToMail(stableClassified, manualArchiveSelections);
     return mergeMailProcessingStatus({

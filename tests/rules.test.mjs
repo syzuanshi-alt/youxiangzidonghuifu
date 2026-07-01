@@ -119,6 +119,9 @@ import {
   isAutoProcessingSwitchFailure,
 } from '../src/autoProcessingReminder.js';
 import {
+  chooseProcessingStatus,
+} from '../src/processingStatus.js';
+import {
   applyManualArchiveSelectionToMail,
   buildManualArchiveCompletionResult,
   confirmManualArchiveSelection,
@@ -171,6 +174,7 @@ import * as workbenchFilters from '../src/workbenchFilters.js';
 import {
   getMailRiskState,
   normalizeMailRiskSnapshot,
+  shouldReplaceStableRiskSnapshot,
 } from '../src/riskState.js';
 import {
   BOSS_DASHBOARD_API_VERSION,
@@ -438,6 +442,127 @@ const translatedMailView = buildMailContentView({
 assert.match(translatedMailView.original, /tracking number/);
 assert.match(translatedMailView.translation, /物流|包裹|运输|快递/);
 assert.equal(translatedMailView.translationSource, 'local_fallback');
+const englishWrongColorBody = 'Hello, I received the wrong color watch. Can you exchange it for the black one?';
+const translatedEnglishWrongColor = translateCustomerMessageToChinese(englishWrongColorBody);
+assert.equal(translatedEnglishWrongColor.language.code, 'en');
+assert.match(translatedEnglishWrongColor.text, /错误颜色|颜色不对|不同颜色/);
+assert.match(translatedEnglishWrongColor.text, /手表/);
+assert.match(translatedEnglishWrongColor.text, /黑色/);
+assert.match(translatedEnglishWrongColor.text, /换/);
+assert.doesNotMatch(translatedEnglishWrongColor.text, /客户在询问|客户提到|意图|方向/);
+const japaneseWrongColorBody = 'こんにちは。注文した時計と違う色の商品が届きました。黒に交換できますか。';
+const translatedJapaneseWrongColor = translateCustomerMessageToChinese(japaneseWrongColorBody);
+assert.equal(translatedJapaneseWrongColor.language.code, 'ja');
+assert.match(translatedJapaneseWrongColor.text, /订购|订单/);
+assert.match(translatedJapaneseWrongColor.text, /手表|商品/);
+assert.match(translatedJapaneseWrongColor.text, /不同颜色|颜色不对|错误颜色/);
+assert.match(translatedJapaneseWrongColor.text, /黑色/);
+assert.match(translatedJapaneseWrongColor.text, /换/);
+assert.doesNotMatch(translatedJapaneseWrongColor.text, /客户在询问|客户提到|意图|方向/);
+const replyAnalysisShouldNotOverrideBodyTranslation = buildMailContentView({
+  subject: 'Wrong color',
+  bodyText: englishWrongColorBody,
+  aiResult: {
+    reply: {
+      translationZh: '客户想换货，需要人工确认。',
+    },
+  },
+});
+assert.notEqual(replyAnalysisShouldNotOverrideBodyTranslation.translation, '客户想换货，需要人工确认。');
+assert.match(replyAnalysisShouldNotOverrideBodyTranslation.translation, /黑色/);
+assert.match(replyAnalysisShouldNotOverrideBodyTranslation.translation, /换/);
+const englishOrderStatusWithChinesePlaceholders = [
+  'Subject: Inquiry About My Order Status Dear Support Team, Hope you’re doing well.',
+  'I am writing to check the latest progress of my order.',
+  'I placed the purchase a few days ago but haven’t received any update about shipment or delivery yet.',
+  'My order number is: [填写订单号]',
+  'Purchase date: [下单日期]',
+  'Item purchased: [商品名称]',
+  'Could you please help me confirm the current status of this order?',
+  'If the goods have been dispatched, kindly send me the tracking number as soon as possible.',
+  'Should there be any delay or problem with my order, please inform me in detail so I can arrange accordingly.',
+  'Looking forward to your prompt reply.',
+  'Best regards, [你的姓名] [联系方式]',
+].join(' ');
+assert.equal(detectCustomerLanguage(englishOrderStatusWithChinesePlaceholders).code, 'en');
+const englishOrderStatusView = buildMailContentView({
+  bodyText: englishOrderStatusWithChinesePlaceholders,
+  aiResult: {
+    reply: {
+      translationZh: '客户想查询订单状态，需要人工确认。',
+    },
+  },
+});
+assert.equal(englishOrderStatusView.customerLanguage.code, 'en');
+assert.notEqual(englishOrderStatusView.translationSource, 'original_zh');
+assert.match(englishOrderStatusView.translation, /订单.*最新进展|订单状态/);
+assert.match(englishOrderStatusView.translation, /发货|配送|物流|追踪|追踪编号|追踪号码/);
+assert.match(englishOrderStatusView.translation, /下单日期/);
+assert.match(englishOrderStatusView.translation, /购买商品/);
+assert.match(englishOrderStatusView.translation, /当前状态/);
+assert.doesNotMatch(englishOrderStatusView.translation, /\.。/);
+assert.doesNotMatch(englishOrderStatusView.translation, /Customer|Subject:|Dear Support Team|Purchase date|Item purchased|Could you please|客户想查询订单状态，需要人工确认/);
+const japaneseOrderStatusWithMetadata = [
+  '件名： ご注文状況の確認のお願い サポートチーム 各位 お世話になっております。',
+  '数日前に商品を注文いたしましたが、発送・配送に関する連絡が届いておりません。',
+  'このためメールにて注文状況の確認をお願いいたします。',
+  '注文番号: 【注文番号を記入】 注文日: 【注文日】 購入商品: 【商品名】',
+  '現在の注文の状況をご確認の上、ご返事をいただけますでしょうか。',
+  'もし発送済みの場合は、追跡番号を送付してください。',
+  'また、遅延や不具合が発生している場合は、詳しい状況をご説明いただけますと幸いです。',
+  'お手数をおかけし恐れ入りますが、早急なご回答をお待ちしております。',
+  '> 发件人：赵允雨 <ayu@vitashinelab.com> > 时间：2026年6月13日 (周六) 12:51 > 主题：【工作台联调】ayu 邮箱真实发送测试 > 收件人：<kinglihua@vitashinelab.com> > 本邮件用于确认新应用授权、发送权限和工作台后端链路是否已经打通。',
+].join(' ');
+const japaneseOrderStatusView = buildMailContentView({
+  bodyText: japaneseOrderStatusWithMetadata,
+});
+assert.equal(japaneseOrderStatusView.customerLanguage.code, 'ja');
+assert.notEqual(japaneseOrderStatusView.translationSource, 'original_zh');
+assert.match(japaneseOrderStatusView.translation, /订单状态|订单的当前状态/);
+assert.match(japaneseOrderStatusView.translation, /发货|配送|追踪/);
+assert.doesNotMatch(japaneseOrderStatusView.original, /发件人|测试时间|本邮件用于|ayu@|kinglihua/);
+assert.doesNotMatch(japaneseOrderStatusView.translation, /現在の注文|ご返事|発生|詳しい状況|発件人|发件人|测试时间|本邮件用于|ayu@|kinglihua/);
+const portugueseReturnBody = 'E-MAIL DE TESTE - solicitação de devolução. Olá, Recebi o pedido VS-75209, mas a embalagem chegou danificada. Quero saber quais são os próximos passos para devolver ou trocar o produto. Atenciosamente, Beatriz Almeida';
+const portugueseReturnView = buildMailContentView({
+  bodyText: portugueseReturnBody,
+  customerLanguage: { code: 'zh', label: '中文' },
+  aiResult: {
+    customerLanguage: { code: 'zh', label: '中文' },
+    reply: {
+      translationZh: '客户在询问订单信息或订单状态。',
+    },
+  },
+});
+assert.equal(detectCustomerLanguage(portugueseReturnBody).code, 'pt');
+assert.equal(portugueseReturnView.customerLanguage.code, 'pt');
+assert.match(portugueseReturnView.translation, /订单 VS-75209/);
+assert.match(portugueseReturnView.translation, /包装|包裹/);
+assert.match(portugueseReturnView.translation, /损坏/);
+assert.match(portugueseReturnView.translation, /退货|换货/);
+assert.doesNotMatch(portugueseReturnView.translation, /客户在询问|订单信息或订单状态|E-MAIL DE TESTE|solicitação|devolução/);
+const multilingualReturnSamples = [
+  ['es', 'Hola, recibí el pedido VS-75209, pero el paquete llegó dañado. Quiero saber los próximos pasos para devolver o cambiar el producto.'],
+  ['fr', 'Bonjour, j’ai reçu la commande VS-75209, mais le colis est arrivé endommagé. Je voudrais connaître les prochaines étapes pour retourner ou échanger le produit.'],
+  ['de', 'Hallo, ich habe die Bestellung VS-75209 erhalten, aber die Verpackung ist beschädigt angekommen. Ich möchte wissen, wie ich das Produkt zurückgeben oder umtauschen kann.'],
+  ['it', 'Ciao, ho ricevuto l’ordine VS-75209, ma il pacco è arrivato danneggiato. Vorrei sapere i prossimi passaggi per restituire o cambiare il prodotto.'],
+  ['nl', 'Hallo, ik heb bestelling VS-75209 ontvangen, maar het pakket is beschadigd aangekomen. Ik wil weten wat de volgende stappen zijn om het product te retourneren of om te ruilen.'],
+  ['tr', 'Merhaba, VS-75209 siparişini teslim aldım, ancak paket hasarlı geldi. Ürünü iade etmek veya değiştirmek için sonraki adımları öğrenmek istiyorum.'],
+  ['vi', 'Xin chào, tôi đã nhận đơn hàng VS-75209 nhưng gói hàng bị hư hỏng khi giao đến. Tôi muốn biết các bước tiếp theo để trả hàng hoặc đổi sản phẩm.'],
+  ['id', 'Halo, saya menerima pesanan VS-75209 tetapi kemasannya rusak. Saya ingin tahu langkah berikutnya untuk mengembalikan atau menukar produk.'],
+];
+multilingualReturnSamples.forEach(([expectedLanguage, body]) => {
+  const view = buildMailContentView({ bodyText: body });
+  assert.equal(view.customerLanguage.code, expectedLanguage);
+  assert.match(view.translation, /VS-75209/);
+  assert.match(view.translation, /损坏/);
+  assert.match(view.translation, /退货|换货/);
+  assert.doesNotMatch(view.translation, /客户在询问|客户提到|Customer|summary/i);
+});
+const unsupportedForeignView = buildMailContentView({
+  bodyText: 'Dette er en testmelding om en ukjent situasjon som ikke har en lokal oversettelsesmal.',
+});
+assert.doesNotMatch(unsupportedForeignView.translation, /客户在询问|客户提到|客户反馈|客户请求/);
+assert.match(unsupportedForeignView.translation, /暂未生成可靠中文全文翻译/);
 assert.equal(detectCustomerLanguage('Hola, necesito ayuda con mi pedido.').code, 'es');
 assert.equal(detectCustomerLanguage('Bonjour, ou est ma commande ?').code, 'fr');
 assert.equal(detectCustomerLanguage('こんにちは、注文を確認したいです。').code, 'ja');
@@ -1099,6 +1224,11 @@ assert.deepEqual(normalizeMailRiskSnapshot(blockedMediumConflict), {
   action: 'blocked',
   lane: 'red',
 });
+assert.equal(shouldReplaceStableRiskSnapshot(null, { risk: 'high' }), true);
+assert.equal(shouldReplaceStableRiskSnapshot({ source: 'auto', risk: 'medium' }, { risk: 'high' }), false);
+assert.equal(shouldReplaceStableRiskSnapshot({ source: 'auto', risk: 'high' }, { risk: 'medium' }), false);
+assert.equal(shouldReplaceStableRiskSnapshot({ source: 'manual', risk: 'high' }, { risk: 'low' }), false);
+assert.equal(shouldReplaceStableRiskSnapshot({ source: 'auto', risk: 'medium' }, { risk: 'high' }, { risk: 'high' }), true);
 assert.deepEqual(
   filterWorkbenchMails(workbenchFilterRows, 'pending').map((mail) => mail.id),
   ['FILTER-LOW', 'FILTER-MEDIUM', 'FILTER-HIGH', 'FILTER-SPAM'],
@@ -1205,6 +1335,22 @@ const failedLowRisk = {
 };
 assert.equal(getWorkbenchProcessingStatus(failedLowRisk).status, 'pending');
 assert.equal(getWorkbenchProcessingStatus(failedLowRisk).label, '动作失败待处理');
+const completedStatusWinsOverLocalFailure = chooseProcessingStatus(
+  {
+    status: 'failed',
+    action: 'send',
+    label: '动作失败待处理',
+    failed: true,
+  },
+  {
+    status: 'completed',
+    action: 'send',
+    label: '已自动回复',
+    completed: true,
+  },
+);
+assert.equal(completedStatusWinsOverLocalFailure.status, 'completed');
+assert.equal(completedStatusWinsOverLocalFailure.label, '已自动回复');
 assert.deepEqual(
   filterWorkbenchMails([...workbenchFilterRows, failedLowRisk], 'urgent').map((mail) => mail.id),
   ['FILTER-HIGH'],
@@ -3170,6 +3316,21 @@ try {
       archived: false,
       error: null,
     },
+  })}\n${JSON.stringify({
+    createdAt: '2026-06-13T03:05:00.000Z',
+    action: 'send',
+    actor: 'scheduled-auto-process',
+    mailId: 'om_real_test_004',
+    messageId: 'om_real_test_004',
+    threadId: 'omt_real_test_004',
+    subject: '我想查询订单',
+    risk: 'high',
+    allowed: false,
+    mode: 'high_risk_send_disabled',
+    result: {
+      ok: false,
+      error: '动作失败待处理：高风险发送开关未开启。',
+    },
   })}\n`, 'utf8');
 
   await withTestServer(createFeishuApiServer({
@@ -3823,20 +3984,47 @@ try {
   assert.equal(lowAIResult.success, true);
   assert.equal(lowAIResult.risk.level, 'low');
   assert.equal(lowAIResult.finalAction, 'draft_only');
-	  assert.equal(lowAIResult.reply.tone, 'polite');
-	  assert.equal(lowAIResult.customerLanguage.code, 'en');
-	  assert.ok(Array.isArray(lowAIResult.agentTrace));
-	  assert.ok(lowAIResult.agentTrace.some((step) => step.skillKey === 'normalize_email_context'));
-	  assert.ok(lowAIResult.agentTrace.some((step) => step.skillKey === 'translate_global_language'));
+  assert.equal(lowAIResult.reply.tone, 'polite');
+  assert.equal(lowAIResult.customerLanguage.code, 'en');
+  assert.ok(Array.isArray(lowAIResult.agentTrace));
+  assert.ok(lowAIResult.agentTrace.some((step) => step.skillKey === 'normalize_email_context'));
+  assert.ok(lowAIResult.agentTrace.some((step) => step.skillKey === 'translate_global_language'));
 	  assert.ok(lowAIResult.agentTrace.some((step) => step.skillKey === 'detect_customer_intent_detail'));
 	  assert.ok(lowAIResult.agentTrace.some((step) => step.skillKey === 'score_knowledge_confidence'));
 	  assert.ok(lowAIResult.agentTrace.some((step) => step.skillKey === 'decide_auto_action'));
-	  assert.equal(lowAIResult.intent.primaryIntent, 'pre_sale_product_question');
-	  assert.equal(lowAIResult.knowledgeConfidence.level, 'medium');
+  assert.equal(lowAIResult.intent.primaryIntent, 'pre_sale_product_question');
+  assert.equal(lowAIResult.knowledgeConfidence.level, 'medium');
 
-	  const taxFAQAIResult = await processEmailWithAI({
-	    senderEmail: 'buyer-ai-tax@example.test',
-	    subject: 'Customs fee and shipping fee',
+  const bodyTranslationAIResult = await processEmailWithAI({
+    senderEmail: 'buyer-ai-translation@example.test',
+    subject: 'Internal routing label should not become translation',
+    bodyText: englishWrongColorBody,
+    summary: '客户想换色，需要人工处理。',
+    source: 'email_auto_reply_workbench',
+  }, { repository });
+  assert.equal(bodyTranslationAIResult.success, true);
+  assert.equal(bodyTranslationAIResult.customerLanguage.code, 'en');
+  assert.match(bodyTranslationAIResult.translation.zh, /错误颜色|颜色不对|不同颜色/);
+  assert.match(bodyTranslationAIResult.translation.zh, /黑色/);
+  assert.match(bodyTranslationAIResult.customerMessageTranslationZh, /黑色/);
+  assert.doesNotMatch(bodyTranslationAIResult.translation.zh, /Internal routing label|客户想换色|意图|方向/);
+  const mappedTranslationMail = mapEmailAIResultToWorkbenchMail({
+    id: 'MAIL-TRANSLATION',
+    sender: 'buyer-ai-translation@example.test',
+    subject: 'Internal routing label should not become translation',
+    summary: '客户想换色，需要人工处理。',
+    bodyText: englishWrongColorBody,
+  }, bodyTranslationAIResult);
+  assert.match(mappedTranslationMail.customerMessageTranslationZh, /黑色/);
+  assert.equal(mappedTranslationMail.translation.source, bodyTranslationAIResult.translation.source);
+  const mappedTranslationView = buildMailContentView(mappedTranslationMail);
+  assert.match(mappedTranslationView.original, /wrong color watch/);
+  assert.match(mappedTranslationView.translation, /黑色/);
+  assert.doesNotMatch(mappedTranslationView.translation, /客户想换色|Internal routing label/);
+
+  const taxFAQAIResult = await processEmailWithAI({
+    senderEmail: 'buyer-ai-tax@example.test',
+    subject: 'Customs fee and shipping fee',
 	    body: 'Do I need to pay tax, customs fee or shipping fee for this watch?',
 	    source: 'email_auto_reply_workbench',
 	  }, { repository });
@@ -4294,6 +4482,8 @@ assert.ok(appJs.includes('WORKBENCH_RISK_SNAPSHOTS_KEY'));
 assert.ok(appJs.includes('applyStableRiskSnapshot'));
 assert.ok(appJs.includes('riskSnapshotKey'));
 assert.ok(appJs.includes('getMailRiskState(mail)'));
+assert.equal(appJs.includes('feishu-mail-risk-rules'), false);
+assert.equal(appJs.includes('applyRiskRule'), false);
 assert.equal(appJs.includes('riskText[mail.risk]'), false);
 assert.equal(appJs.includes('renderMainNavigationState'), false);
 assert.equal(appJs.includes('ruleMenuOpen'), false);

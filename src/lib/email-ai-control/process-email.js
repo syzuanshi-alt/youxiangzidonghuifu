@@ -2,7 +2,10 @@ import { getPublishedEmailAIConfig } from './config-loader.js';
 import { createEmailAgentSkills } from './agent-skills.js';
 import { runEmailAgent } from './email-agent.js';
 import { pickModelProvider } from './model-adapters/index.js';
-import { detectCustomerLanguage } from '../../emailTranslation.js';
+import {
+  detectCustomerLanguage,
+  translateCustomerMessageToChinese,
+} from '../../emailTranslation.js';
 
 function modelSummary(config = {}, replyProvider = null) {
   const riskProvider = pickModelProvider(config, 'risk_check');
@@ -31,17 +34,44 @@ function finalActionFromResult({ spam, risk, safety, config }) {
   return lowRiskFinalAction(risk, config);
 }
 
+function customerMessageBodyText(emailPayload = {}) {
+  return [
+    emailPayload.bodyText,
+    emailPayload.body_text,
+    emailPayload.body_plain_text,
+    emailPayload.body,
+    emailPayload.summary,
+  ].map((value) => String(value || '').trim()).find(Boolean) || '';
+}
+
+function normalizeTranslationResult(translation = null, emailPayload = {}) {
+  const result = translation?.text
+    ? translation
+    : translateCustomerMessageToChinese(customerMessageBodyText(emailPayload));
+
+  return {
+    zh: String(result.text || ''),
+    source: String(result.source || ''),
+    language: result.language || null,
+  };
+}
+
 function failedResult(emailPayload, error) {
   const customerLanguage = emailPayload.customerLanguage
     || detectCustomerLanguage([
       emailPayload.subject,
       emailPayload.bodyText || emailPayload.body_text || emailPayload.body || emailPayload.summary,
     ].filter(Boolean).join('\n'));
+  const translation = normalizeTranslationResult(null, emailPayload);
 
   return {
     success: false,
     source: emailPayload.source || 'email_auto_reply_workbench',
     customerLanguage,
+    translation,
+    translationZh: translation.zh,
+    customerMessageTranslationZh: translation.zh,
+    customerMessageTranslationSource: translation.source,
     configVersionId: '',
     spam: {
       isSpam: false,
@@ -121,11 +151,16 @@ export async function processEmailWithAI(emailPayload = {}, {
       safety,
       config,
     });
+    const translation = normalizeTranslationResult(context.translation, payloadWithLanguage);
 
     return {
       success: true,
       source: payloadWithLanguage.source || 'email_auto_reply_workbench',
       customerLanguage,
+      translation,
+      translationZh: translation.zh,
+      customerMessageTranslationZh: translation.zh,
+      customerMessageTranslationSource: translation.source,
       configVersionId: config.version?.id || 'mock-default',
       spam: {
         isSpam: spam.isSpam,

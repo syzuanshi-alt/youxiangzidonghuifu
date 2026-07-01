@@ -11,6 +11,9 @@ import {
   mapFeishuMessageToMail,
 } from '../src/feishuAdapter.js';
 import {
+  isCompletedProcessingStatus,
+} from '../src/processingStatus.js';
+import {
   createEmailAIStoreRepository,
   mapEmailAIResultToWorkbenchMail,
   processEmailWithAI,
@@ -678,6 +681,13 @@ function canApplyThreadProcessingStatus(status = {}, mail = {}) {
     && mailReceivedAt <= completedAt + 60_000;
 }
 
+function shouldReplaceProcessingStatus(existing = null, next = null) {
+  if (!existing) return true;
+  if (isCompletedProcessingStatus(existing)) return false;
+  if (isCompletedProcessingStatus(next)) return true;
+  return true;
+}
+
 async function loadMailProcessingStatusMap(rootDir) {
   const auditPath = resolve(rootDir, '.runtime/feishu-actions.ndjson');
   const statusMap = new Map();
@@ -700,15 +710,21 @@ async function loadMailProcessingStatusMap(rootDir) {
       const status = buildProcessingStatusFromAuditEvent(event);
       if (!status) return;
 
+      const setStatus = (key, value) => {
+        const existing = statusMap.get(key) || null;
+        if (shouldReplaceProcessingStatus(existing, value)) {
+          statusMap.set(key, value);
+        }
+      };
       const keys = processingStatusKeysFromAuditEvent(event);
       keys.directKeys.forEach((mailId) => {
-        statusMap.set(mailId, {
+        setStatus(mailId, {
           ...status,
           matchScope: 'direct',
         });
       });
       keys.threadKeys.forEach((threadKey) => {
-        statusMap.set(threadKey, {
+        setStatus(threadKey, {
           ...status,
           matchScope: 'thread',
         });

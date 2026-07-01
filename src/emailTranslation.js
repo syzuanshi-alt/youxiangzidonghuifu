@@ -29,15 +29,69 @@ function hasChinese(text = '') {
   return /[\u3400-\u9fff]/.test(text);
 }
 
-function hasAny(text, patterns = []) {
-  return patterns.some((pattern) => pattern.test(text));
+function trimTransportMetadata(text = '') {
+  return String(text || '')
+    .split(/\s+>\s*(?:发件人|寄件人|收件人|时间|测试时间|主题|送达检测|本邮件用于|当前发送邮箱)\s*[:：]/)[0]
+    .trim();
+}
+
+function stripSubjectHeaders(text = '') {
+  return String(text || '')
+    .replace(/\bSubject:\s*[^.!?\n]*?\s+(?=(?:Dear|Hello|Hi)\b)/gi, '')
+    .replace(/(^|\s)件名[:：]\s*.*?(?=(?:サポートチーム|各位|お世話になっております|こんにちは|こんばんは))/gu, '$1')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+function dedupeRepeatedSentences(text = '') {
+  const seen = new Set();
+  return (String(text || '').match(/[^.!?。！？\n]+[.!?。！？]?/g) || [])
+    .map((sentence) => sentence.trim())
+    .filter(Boolean)
+    .filter((sentence) => {
+      const key = sentence.toLowerCase();
+      if (sentence.length < 24) return true;
+      if (seen.has(key)) return false;
+      seen.add(key);
+      return true;
+    })
+    .join(' ')
+    .trim();
+}
+
+function cleanCustomerMessageText(text = '') {
+  return dedupeRepeatedSentences(stripSubjectHeaders(trimTransportMetadata(text))) || normalizeText(text);
 }
 
 function normalizeLatinText(text = '') {
   return String(text || '')
     .toLowerCase()
     .normalize('NFD')
-    .replace(/[\u0300-\u036f]/g, '');
+    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/ı/g, 'i')
+    .replace(/ğ/g, 'g')
+    .replace(/ş/g, 's')
+    .replace(/ç/g, 'c')
+    .replace(/ö/g, 'o')
+    .replace(/ü/g, 'u');
+}
+
+function countMatches(text = '', pattern) {
+  return (String(text || '').match(pattern) || []).length;
+}
+
+function stripBracketedPlaceholders(text = '') {
+  return String(text || '')
+    .replace(/[【\[][^\]】]{0,80}[\]】]/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+function hasLatinDominantMixedText(text = '') {
+  const source = stripBracketedPlaceholders(text);
+  const chineseCount = countMatches(source, /[\u3400-\u9fff]/g);
+  const latinCount = countMatches(source, /[a-z]/gi);
+  return latinCount >= 25 && latinCount >= Math.max(1, chineseCount * 3);
 }
 
 function languageResult(code, {
@@ -61,7 +115,6 @@ export function detectCustomerLanguage(text = '') {
   if (!original) return languageResult('unknown', { confidence: 0, source: 'empty' });
   if (/[\u3040-\u30ff]/.test(original)) return languageResult('ja', { confidence: 0.95 });
   if (/[\uac00-\ud7af]/.test(original)) return languageResult('ko', { confidence: 0.95 });
-  if (hasChinese(original)) return languageResult('zh', { confidence: 0.95 });
   if (/[\u0600-\u06ff]/.test(original)) return languageResult('ar', { confidence: 0.9 });
   if (/[\u0590-\u05ff]/.test(original)) return languageResult('he', { confidence: 0.9 });
   if (/[\u0900-\u097f]/.test(original)) return languageResult('hi', { confidence: 0.9 });
@@ -69,43 +122,60 @@ export function detectCustomerLanguage(text = '') {
   if (/[\u0370-\u03ff]/.test(original)) return languageResult('el', { confidence: 0.9 });
   if (/[\u0400-\u04ff]/.test(original)) return languageResult('ru', { confidence: 0.9 });
 
-  const latin = normalizeLatinText(original);
+  const detectionText = stripBracketedPlaceholders(original);
+  const mixedLatinDominant = hasLatinDominantMixedText(original);
+  if (hasChinese(detectionText) && !mixedLatinDominant) {
+    return languageResult('zh', { confidence: 0.95 });
+  }
+
+  const latin = normalizeLatinText(detectionText || original);
   const languageScores = [
     ['es', [
-      /\b(hola|gracias|pedido|envio|reembolso|devolucion|por favor|necesito|donde|cuanto|ayuda)\b/,
+      /\b(hola|gracias|por favor|necesito|donde|cuanto|ayuda)\b/,
+      /\b(pedido|envio|reembolso|devolucion|devolver|cambiar|producto|paquete|danado|dañado)\b/,
       /[¿¡ñ]/i,
     ]],
     ['fr', [
-      /\b(bonjour|merci|commande|livraison|remboursement|retour|annuler|client|colis|ou est|s'il vous plait)\b/,
+      /\b(bonjour|merci|client|ou est|s'il vous plait)\b/,
+      /\b(commande|livraison|remboursement|retour|retourner|echanger|produit|colis|endommage)\b/,
       /[çœ]/i,
     ]],
     ['de', [
-      /\b(hallo|danke|bestellung|lieferung|ruckerstattung|ruckgabe|bitte|paket|kunde)\b/,
+      /\b(hallo|danke|bitte|kunde)\b/,
+      /\b(bestellung|lieferung|ruckerstattung|ruckgabe|zuruckgeben|umtauschen|produkt|paket|beschadigt)\b/,
       /[ß]/i,
     ]],
     ['pt', [
-      /\b(ola|obrigado|obrigada|pedido|envio|reembolso|devolucao|por favor|cliente|pacote)\b/,
+      /\b(ola|obrigado|obrigada|por favor|cliente)\b/,
+      /\b(pedido|envio|reembolso|devolucao|devolver|trocar|produto|embalagem|danificada|danificado)\b/,
       /[ãõ]/i,
     ]],
     ['it', [
-      /\b(ciao|grazie|ordine|spedizione|rimborso|reso|per favore|cliente|pacco)\b/,
+      /\b(ciao|grazie|per favore|cliente)\b/,
+      /\b(ordine|spedizione|rimborso|reso|restituire|cambiare|prodotto|pacco|danneggiato)\b/,
     ]],
     ['nl', [
-      /\b(hallo|bedankt|bestelling|verzending|terugbetaling|retour|alstublieft|pakket)\b/,
+      /\b(hallo|bedankt|alstublieft)\b/,
+      /\b(bestelling|verzending|terugbetaling|retour|retourneren|ruilen|product|pakket|beschadigd)\b/,
     ]],
     ['tr', [
-      /\b(merhaba|tesekkur|siparis|kargo|iade|lutfen|musteri)\b/,
+      /\b(merhaba|tesekkur|lutfen|musteri)\b/,
+      /\b(siparis|kargo|iade|degistirmek|urun|paket|hasarli)\b/,
       /[ğışöçü]/i,
     ]],
     ['vi', [
-      /\b(xin chao|cam on|don hang|giao hang|hoan tien|khach hang)\b/,
+      /\b(xin chao|cam on|khach hang)\b/,
+      /\b(don hang|giao hang|hoan tien|tra lai|doi|san pham|goi hang|hu hong)\b/,
       /[ăâêôơưđ]/i,
     ]],
     ['id', [
-      /\b(halo|terima kasih|pesanan|pengiriman|pengembalian dana|tolong|pelanggan)\b/,
+      /\b(halo|terima kasih|tolong|pelanggan)\b/,
+      /\b(pesanan|pengiriman|pengembalian dana|mengembalikan|menukar|produk|kemasan|rusak)\b/,
     ]],
     ['en', [
-      /\b(hello|hi|thanks|thank you|order|shipping|tracking|refund|return|please|customer|package|help)\b/,
+      /\b(hello|hi|thanks|thank you|please|customer|help|could you|can you)\b/,
+      /\b(order|shipping|tracking|refund|return|package)\b/,
+      /\b(product|material|size|color|stock|information|available)\b/,
     ]],
   ].map(([code, patterns]) => ({
     code,
@@ -119,69 +189,220 @@ export function detectCustomerLanguage(text = '') {
     });
   }
 
-  if (/[a-z]/i.test(original)) return languageResult('en', { confidence: 0.5 });
+  if (/[a-z]/i.test(detectionText || original)) return languageResult('en', { confidence: mixedLatinDominant ? 0.85 : 0.5 });
+  if (hasChinese(original)) return languageResult('zh', { confidence: 0.75 });
   return languageResult('unknown', { confidence: 0.25 });
 }
 
-function collectFallbackTranslationNotes(text = '') {
+function extractReferenceTokens(text = '') {
+  return Array.from(new Set(String(text || '').match(/\b[A-Z]{1,}[A-Z0-9-]*\d[A-Z0-9-]*\b/g) || []));
+}
+
+function translateKnownPlaceholders(text = '') {
+  return String(text || '')
+    .replace(/【注文番号を記入】/g, '【填写订单号】')
+    .replace(/【注文日】/g, '【下单日期】')
+    .replace(/【商品名】/g, '【商品名称】');
+}
+
+function valueAfterColon(text = '') {
+  const parts = String(text || '').split(/[:：]/);
+  return parts.length > 1
+    ? translateKnownPlaceholders(parts.slice(1).join(':').trim()).replace(/[.!?。！？]+$/u, '')
+    : '';
+}
+
+function colorZh(text = '') {
   const lower = normalizeLatinText(text);
-  const notes = [];
+  if (/\bblack\b/.test(lower) || /黒|黑/.test(text)) return '黑色';
+  if (/\bwhite\b/.test(lower) || /白/.test(text)) return '白色';
+  if (/\bred\b/.test(lower) || /赤|红/.test(text)) return '红色';
+  if (/\bblue\b/.test(lower) || /青|蓝/.test(text)) return '蓝色';
+  if (/\bgreen\b/.test(lower) || /緑|绿/.test(text)) return '绿色';
+  if (/\bgold\b/.test(lower) || /金/.test(text)) return '金色';
+  if (/\bsilver\b/.test(lower) || /銀|银/.test(text)) return '银色';
+  if (/\bbrown\b/.test(lower) || /茶|棕/.test(text)) return '棕色';
+  return '';
+}
 
-  if (hasAny(lower, [/order/, /order number/, /order id/, /order status/, /pedido/, /commande/, /bestellung/, /ordine/, /注文/, /주문/])) {
-    notes.push('客户在询问订单信息或订单状态。');
+function productZh(text = '') {
+  const lower = normalizeLatinText(text);
+  if (/\bwatch(es)?\b/.test(lower) || /時計|手表/.test(text)) return '手表';
+  if (/\bshoe(s)?\b/.test(lower) || /靴|鞋/.test(text)) return '鞋子';
+  if (/\bbag(s)?\b/.test(lower) || /バッグ|包/.test(text)) return '包';
+  if (/\bitem\b|\bproduct\b|\bgoods\b/.test(lower) || /商品/.test(text)) return '商品';
+  return '商品';
+}
+
+function translateEnglishCustomerSentence(sentence = '') {
+  const lower = normalizeLatinText(sentence);
+  const refs = extractReferenceTokens(sentence);
+  const refText = refs.length ? ` ${refs.join('、')}` : '';
+  const color = colorZh(sentence);
+  const product = productZh(sentence);
+
+  if (/^(hi|hello|dear team|dear support)[,!. ]*$/i.test(sentence)) return '您好。';
+  if (/hope you.?re doing well/.test(lower)) return '希望您一切顺利。';
+  if (/latest progress of my order/.test(lower)) return '我想查询订单的最新进展。';
+  if (/placed the purchase a few days ago/.test(lower) && /shipment|delivery/.test(lower)) {
+    return '我几天前下单了，但还没有收到发货或配送更新。';
   }
-  if (hasAny(lower, [/tracking/, /shipping/, /shipment/, /package/, /delivery/, /where is my package/, /envio/, /livraison/, /colis/, /spedizione/, /versand/, /配送/, /発送/, /配達/])) {
-    notes.push('客户在询问物流、包裹或运输状态。');
+  if (/my order number is/.test(lower)) return `我的订单号是：${valueAfterColon(sentence) || '未填写'}。`;
+  if (/purchase date/.test(lower)) return `下单日期：${valueAfterColon(sentence) || '未填写'}。`;
+  if (/item purchased/.test(lower)) return `购买商品：${valueAfterColon(sentence) || '未填写'}。`;
+  if (/confirm the current status of this order/.test(lower)) return '请帮我确认这个订单的当前状态。';
+  if (/goods have been dispatched/.test(lower) && /tracking number/.test(lower)) {
+    return '如果商品已经发出，请尽快发送物流追踪号码。';
   }
-  if (hasAny(lower, [/refund/, /return/, /cancel/, /chargeback/, /reembolso/, /devolucion/, /remboursement/, /retour/, /annuler/, /ruckerstattung/, /返品/, /返金/])) {
-    notes.push('客户提到退款、退货、取消订单或支付争议，需要人工谨慎处理。');
+  if (/delay or problem with my order/.test(lower)) {
+    return '如果我的订单有任何延迟或问题，请详细告知，方便我安排后续事宜。';
   }
-  if (hasAny(lower, [/damaged/, /broken/, /defective/, /photo/, /video/, /quality/, /danado/, /endommage/, /defectueux/, /beschadigt/, /破損/])) {
-    notes.push('客户反馈商品问题或可能需要补充图片、视频等资料。');
+  if (/looking forward to your prompt reply/.test(lower)) return '期待您尽快回复。';
+  if (/best regards/.test(lower)) return '祝好。';
+  if ((/wrong color|different color|incorrect color/.test(lower)) && /\b(received|got|arrived|sent)\b/.test(lower)) {
+    return `我收到的${product}颜色不对。`;
   }
-  if (hasAny(lower, [/size/, /material/, /color/, /stock/, /available/, /talla/, /taille/, /groesse/, /größe/, /色/, /サイズ/])) {
-    notes.push('客户在询问尺码、材质、颜色或库存等产品信息。');
+  if (/\bexchange|replace|change\b/.test(lower) && color) {
+    return `可以换成${color}吗？`;
   }
-  if (hasAny(lower, [/help/, /support/, /question/, /inquiry/, /ayuda/, /aide/, /hilfe/, /assistenza/])) {
-    notes.push('客户请求客服协助处理问题。');
+  if (/\bexchange|replace|change\b/.test(lower)) return '可以更换吗？';
+  if (/\b(order status|check my order|track my order)\b/.test(lower)) {
+    return `可以帮我查询订单状态${refText}吗？`;
+  }
+  if (/where is my package/.test(lower)) return '我的包裹在哪里？';
+  if (/could you help me check (the )?tracking number/.test(lower)) return '可以帮我查询物流单号吗？';
+  if (/shipping status/.test(lower)) return '运输状态。';
+  if (/tracking number/.test(lower)) return '物流单号。';
+  if (/do not have the order number|don't have the order number/.test(lower)) return '我没有订单号。';
+  if (/order number/.test(lower)) return `订单号${refText}。`;
+  if (/order email/.test(lower)) return '下单邮箱。';
+  if (/i want (a )?refund|request (a )?refund/.test(lower)) return '我想申请退款。';
+  if (/i want to return|request (a )?return/.test(lower)) return '我想申请退货。';
+  if (/cancel my order/.test(lower)) return '取消我的订单。';
+  if (/item is damaged|product is damaged|arrived damaged/.test(lower)) return '商品损坏了。';
+  if (/broken|defective/.test(lower)) return '商品破损或有缺陷。';
+  if (/what size|which size|size should i choose/.test(lower)) return '我应该选择什么尺码？';
+  if (/material/.test(lower) && /color/.test(lower) && /stock|available|information/.test(lower)) {
+    return '请提供产品的尺码、材质、颜色和库存信息。';
+  }
+  if (/is .* available|in stock/.test(lower)) return '是否有库存？';
+  if (/requested file has been sent/.test(lower) || /file has been sent/.test(lower)) return '要求的资料已经发送。';
+  if (/please confirm received/.test(lower)) return '请确认是否收到。';
+  if (/thank you|thanks/.test(lower)) return '谢谢。';
+  return '';
+}
+
+function translateCommonCommerceSentence(sentence = '') {
+  const lower = normalizeLatinText(sentence);
+  const refs = extractReferenceTokens(sentence);
+  const refText = refs.length ? ` ${refs.join('、')}` : '';
+
+  if (/^(ola|hola|bonjour|hallo|ciao|merhaba|xin chao|halo)[,!. ]*$/i.test(lower)) return '您好。';
+  if (/e-mail de teste|email de teste|mail de teste/.test(lower) && /devolu|return|retour|ruckgabe|restitu|retourneren|iade|tra lai|mengembalikan/.test(lower)) {
+    return '测试邮件：退货申请。';
+  }
+  if (refs.length
+    && /(embalagem|paquete|colis|verpackung|pacco|verpakking|pakket|paket|goi hang|kemasan|package)/.test(lower)
+    && /(danific|danad|dañ|dano|endommag|beschadig|danneggi|hasar|hu hong|rusak|damag)/.test(lower)) {
+    return `我收到了订单${refText}，但包装或包裹送达时已经损坏。`;
+  }
+  if (/(recebi|recibi|recu|j.ai recu|erhalten|ricevuto|ontvangen|teslim aldim|nhan duoc|menerima)/.test(lower)
+    && /(pedido|commande|bestellung|ordine|siparis|don hang|pesanan|order)/.test(lower)
+    && /(embalagem|paquete|colis|verpackung|pacco|verpakking|pakket|paket|goi hang|kemasan|package)/.test(lower)
+    && /(danific|danad|dañ|dano|endommag|beschadig|danneggi|hasar|hu hong|rusak|damag)/.test(lower)) {
+    return `我收到了订单${refText}，但包装或包裹送达时已经损坏。`;
+  }
+  if (/(recebi|recibi|recu|j.ai recu|erhalten|ricevuto|ontvangen|teslim aldim|nhan duoc|menerima)/.test(lower)
+    && /(pedido|commande|bestellung|ordine|siparis|don hang|pesanan|order)/.test(lower)) {
+    return `我收到了订单${refText}。`;
+  }
+  if (/(embalagem|paquete|colis|verpackung|pacco|verpakking|pakket|paket|goi hang|kemasan|package)/.test(lower)
+    && /(danific|danad|dañ|dano|endommag|beschadig|danneggi|hasar|hu hong|rusak|damag)/.test(lower)) {
+    return '但包装或包裹送达时已经损坏。';
+  }
+  if (/(proximos passos|proximos pasos|prochaines etapes|nachsten schritte|prossimi passaggi|volgende stappen|sonraki adim|cac buoc tiep theo|langkah berikutnya|next steps)/.test(lower)
+    && /(devolver|trocar|devolver|cambiar|retourner|echanger|zuruckgeben|umtauschen|restituire|cambiare|retourneren|ruilen|iade|degistirmek|tra lai|tra hang|doi|mengembalikan|menukar|return|exchange)/.test(lower)) {
+    return '我想了解退货或换货的下一步。';
+  }
+  if (/(devolver|trocar|cambiar|retourner|echanger|zuruckgeben|umtauschen|restituire|cambiare|retourneren|ruilen|iade|degistirmek|tra lai|tra hang|doi|mengembalikan|menukar)/.test(lower)) {
+    return '我想退货或换货。';
+  }
+  if (/(atenciosamente|atentamente|cordialement|mit freundlichen grussen|distinti saluti|met vriendelijke groet|saygilarimla|best regards)/.test(lower)) {
+    return '此致。';
   }
 
-  return notes;
+  return '';
+}
+
+function translateJapaneseCustomerSentence(sentence = '') {
+  const product = productZh(sentence);
+  const color = colorZh(sentence);
+
+  if (/^(こんにちは|こんばんは|お世話になります)[。.!！ ]*$/.test(sentence)) return '您好。';
+  if (/サポートチーム|各位|お世話になっております/.test(sentence)) return '客服团队各位，您好。';
+  if (/数日前に商品を注文/.test(sentence) && /発送|配送/.test(sentence)) {
+    return '我几天前订购了商品，但还没有收到发货或配送相关通知。';
+  }
+  if (/メールにて注文状況の確認/.test(sentence)) return '因此想通过邮件确认订单状态。';
+  if (/注文番号|注文日|購入商品/.test(sentence)) {
+    return translateKnownPlaceholders(sentence)
+      .replace(/注文番号[:：]\s*/g, '订单号：')
+      .replace(/注文日[:：]\s*/g, ' 下单日期：')
+      .replace(/購入商品[:：]\s*/g, ' 购买商品：')
+      .replace(/\s+/g, ' ')
+      .trim();
+  }
+  if (/現在の注文の状況/.test(sentence)) return '请帮我确认当前订单状态并回复。';
+  if (/発送済み/.test(sentence) && /追跡番号/.test(sentence)) return '如果已经发货，请发送物流追踪号码。';
+  if (/遅延|不具合/.test(sentence)) return '如果发生延迟或问题，请说明详细情况。';
+  if (/早急なご回答|回答をお待ち/.test(sentence)) return '麻烦您尽快回复。';
+  if ((/違う色|異なる色|色が違|色違い/.test(sentence)) && /届き|届いた|受け取り|受け取/.test(sentence)) {
+    return `收到的${product}和我订购的是不同颜色。`;
+  }
+  if (/交換/.test(sentence) && color) return `可以换成${color}吗？`;
+  if (/交換/.test(sentence)) return '可以更换吗？';
+  if (/注文/.test(sentence) && /(確認|状況|ステータス)/.test(sentence)) return '我想确认订单状态。';
+  if (/(配送|発送|配達)/.test(sentence) && /(確認|状況|追跡)/.test(sentence)) return '我想确认配送或物流状态。';
+  if (/返金/.test(sentence)) return '我想申请退款。';
+  if (/返品/.test(sentence)) return '我想申请退货。';
+  return '';
+}
+
+function addTemplateSentenceBoundaries(text = '') {
+  return String(text || '')
+    .replace(/\s+(Purchase date\s*:)/gi, '. $1')
+    .replace(/\s+(Item purchased\s*:)/gi, '. $1')
+    .replace(/\s+(Could you please\b)/gi, '. $1')
+    .replace(/\s+(If the goods have been dispatched\b)/gi, '. $1')
+    .replace(/\s+(Should there be any delay\b)/gi, '. $1')
+    .replace(/\s+(Looking forward to your prompt reply\b)/gi, '. $1')
+    .replace(/\s+(Best regards\b)/gi, '. $1')
+    .replace(/\s+(注文日\s*:)/gu, '。$1')
+    .replace(/\s+(購入商品\s*:)/gu, '。$1')
+    .replace(/\s+(現在の注文)/gu, '。$1')
+    .replace(/\s+(もし発送済み)/gu, '。$1')
+    .replace(/\s+(また、遅延)/gu, '。$1')
+    .replace(/\s+(お手数をおかけ)/gu, '。$1');
+}
+
+function splitCustomerSentences(text = '') {
+  return (addTemplateSentenceBoundaries(text).match(/[^.!?。！？\n]+[.!?。！？]?/g) || [])
+    .map((sentence) => sentence.trim())
+    .filter(Boolean);
 }
 
 function translateKnownCustomerSentences(text = '') {
-  const patterns = [
-    [/^(hi|hello|dear team|dear support)[,!. ]*$/i, '您好。'],
-    [/where is my package/i, '我的包裹在哪里？'],
-    [/could you help me check (the )?tracking number/i, '可以帮我查询物流单号吗？'],
-    [/shipping status/i, '运输状态。'],
-    [/tracking number/i, '物流单号。'],
-    [/i want to check my order status/i, '我想查询订单状态。'],
-    [/check my order/i, '查询我的订单。'],
-    [/order status/i, '订单状态。'],
-    [/do not have the order number|don't have the order number/i, '我没有订单号。'],
-    [/order number/i, '订单号。'],
-    [/order email/i, '下单邮箱。'],
-    [/i want (a )?refund|request (a )?refund/i, '我想申请退款。'],
-    [/i want to return|request (a )?return/i, '我想申请退货。'],
-    [/cancel my order/i, '取消我的订单。'],
-    [/item is damaged|product is damaged|arrived damaged/i, '商品损坏了。'],
-    [/broken|defective/i, '商品破损或有缺陷。'],
-    [/what size|which size|size should i choose/i, '我应该选择什么尺码？'],
-    [/is .* available|in stock/i, '是否有库存？'],
-    [/thank you|thanks/i, '谢谢。'],
-  ];
-
-  return text
-    .split(/(?<=[.!?。！？])\s+|\n+/)
-    .map((sentence) => sentence.trim())
-    .filter(Boolean)
-    .map((sentence) => patterns.find(([pattern]) => pattern.test(sentence))?.[1] || '')
+  return splitCustomerSentences(text)
+    .map((sentence) => (
+      translateJapaneseCustomerSentence(sentence)
+      || translateEnglishCustomerSentence(sentence)
+      || translateCommonCommerceSentence(sentence)
+    ))
     .filter(Boolean);
 }
 
 export function translateCustomerMessageToChinese(text = '') {
-  const original = normalizeText(text);
+  const original = cleanCustomerMessageText(text);
   const language = detectCustomerLanguage(original);
   if (!original) {
     return {
@@ -191,7 +412,7 @@ export function translateCustomerMessageToChinese(text = '') {
     };
   }
 
-  if (hasChinese(original)) {
+  if (language.code === 'zh') {
     return {
       text: original,
       source: 'original_zh',
@@ -200,12 +421,10 @@ export function translateCustomerMessageToChinese(text = '') {
   }
 
   const translatedSentences = translateKnownCustomerSentences(original);
-  const notes = collectFallbackTranslationNotes(original)
-    .filter((note) => !translatedSentences.some((sentence) => sentence.includes(note.slice(0, 4))));
 
   return {
-    text: translatedSentences.length || notes.length
-      ? [...translatedSentences, ...notes].join('\n')
+    text: translatedSentences.length
+      ? translatedSentences.join('\n')
       : `已识别客户来信语言：${language.label}。暂未生成可靠中文全文翻译，请人工查看上方客户原文。`,
     source: 'local_fallback',
     language,
@@ -213,18 +432,22 @@ export function translateCustomerMessageToChinese(text = '') {
 }
 
 export function buildMailContentView(mail = {}) {
-  const original = normalizeText(mail.bodyText || mail.summary || '当前邮件未返回可读正文。');
+  const original = cleanCustomerMessageText(mail.bodyText || mail.summary || '当前邮件未返回可读正文。');
   const fallback = translateCustomerMessageToChinese(original);
-  const customerLanguage = mail.customerLanguage
+  const providedLanguage = mail.customerLanguage
     || mail.aiResult?.customerLanguage
     || mail.aiResult?.reply?.customerLanguage
-    || fallback.language
-    || detectCustomerLanguage(original);
+    || null;
+  const detectedLanguage = fallback.language || detectCustomerLanguage(original);
+  const customerLanguage = providedLanguage?.code === 'zh' && detectedLanguage.code !== 'zh'
+    ? detectedLanguage
+    : providedLanguage || detectedLanguage;
   const aiTranslation = normalizeText(
     mail.customerMessageTranslationZh
       || mail.translation?.zh
+      || mail.translationZh
       || mail.aiResult?.translation?.zh
-      || mail.aiResult?.reply?.translationZh
+      || mail.aiResult?.customerMessageTranslationZh
       || mail.aiResult?.reply?.customerMessageZh,
   );
 

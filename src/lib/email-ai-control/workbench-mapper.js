@@ -8,6 +8,25 @@ const LANE_BY_RISK = {
   spam: 'white',
 };
 
+function normalizeBodyTranslation(aiResult = {}, mail = {}) {
+  const zh = String(
+    aiResult.customerMessageTranslationZh
+      || aiResult.translation?.zh
+      || aiResult.translationZh
+      || mail.customerMessageTranslationZh
+      || mail.translation?.zh
+      || '',
+  ).trim();
+
+  if (!zh) return null;
+
+  return {
+    zh,
+    source: String(aiResult.customerMessageTranslationSource || aiResult.translation?.source || mail.translation?.source || '').trim(),
+    language: aiResult.translation?.language || aiResult.customerLanguage || mail.translation?.language || mail.customerLanguage || null,
+  };
+}
+
 function actionFromFinalAction(finalAction, riskLevel, isSpam) {
   if (isSpam || finalAction === 'ignore_spam') return 'ignore';
   if (finalAction === 'blocked' || riskLevel === 'high') return 'blocked';
@@ -78,6 +97,7 @@ export function mapEmailAIResultToWorkbenchMail(mail = {}, aiResult = {}) {
       mail.bodyText,
       mail.body,
     ].filter(Boolean).join('\n'));
+  const bodyTranslation = normalizeBodyTranslation(aiResult, mail);
 
   if (!aiResult.success) {
     return {
@@ -85,6 +105,10 @@ export function mapEmailAIResultToWorkbenchMail(mail = {}, aiResult = {}) {
       aiResult,
       customerLanguage,
       customerLanguageCode: customerLanguage.code,
+      translation: bodyTranslation || mail.translation || null,
+      translationZh: bodyTranslation?.zh || mail.translationZh || '',
+      customerMessageTranslationZh: bodyTranslation?.zh || mail.customerMessageTranslationZh || '',
+      customerMessageTranslationSource: bodyTranslation?.source || mail.customerMessageTranslationSource || '',
       category: 'AI 处理失败',
       action: 'draft_only',
       risk: 'medium',
@@ -114,6 +138,10 @@ export function mapEmailAIResultToWorkbenchMail(mail = {}, aiResult = {}) {
     aiResult,
     customerLanguage,
     customerLanguageCode: customerLanguage.code,
+    translation: bodyTranslation || mail.translation || null,
+    translationZh: bodyTranslation?.zh || mail.translationZh || '',
+    customerMessageTranslationZh: bodyTranslation?.zh || mail.customerMessageTranslationZh || '',
+    customerMessageTranslationSource: bodyTranslation?.source || mail.customerMessageTranslationSource || '',
     category: isSpam
       ? '垃圾邮件'
       : aiResult.risk?.matchedRules?.[0] || aiResult.knowledgeBaseRefs?.[0]?.category || 'AI 风险判定',

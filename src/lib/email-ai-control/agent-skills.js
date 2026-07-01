@@ -21,14 +21,15 @@ const RISK_WEIGHT = {
   low: 1,
 };
 
-function emailOriginalText(emailPayload = {}) {
+function emailBodyTextForTranslation(emailPayload = {}) {
   return [
-    emailPayload.subject,
-    emailPayload.body,
     emailPayload.bodyText,
     emailPayload.body_text,
+    emailPayload.body_plain_text,
+    emailPayload.body,
     emailPayload.summary,
-  ].filter(Boolean).join('\n');
+    emailPayload.subject,
+  ].map((value) => String(value || '').trim()).find(Boolean) || '';
 }
 
 function riskFromFloor(floor = 'medium') {
@@ -118,8 +119,12 @@ export function createEmailAgentSkills({
     },
 
     translate_global_language: async (context = {}) => {
-      const original = emailOriginalText(context.emailPayload);
-      const customerLanguage = context.emailPayload?.customerLanguage || languageDetector(original);
+      const original = emailBodyTextForTranslation(context.emailPayload);
+      const languageSource = [
+        context.emailPayload?.subject,
+        original,
+      ].filter(Boolean).join('\n');
+      const customerLanguage = context.emailPayload?.customerLanguage || languageDetector(languageSource);
       const translation = translator(original);
       return {
         contextPatch: {
