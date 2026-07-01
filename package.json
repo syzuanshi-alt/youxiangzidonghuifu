@@ -1,0 +1,13 @@
+{
+  "name": "as-feishu-mail-panel",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "test": "node tests/rules.test.mjs",
+    "dev": "python3 -m http.server 5174",
+    "dev:api": "node server/feishuApiServer.mjs",
+    "export:boss": "node scripts/exportBossDashboardSnapshot.mjs",
+    "smoke:feishu": "node scripts/feishuReadSmokeTest.mjs"
+  }
+}

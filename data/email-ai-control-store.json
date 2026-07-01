@@ -1,0 +1,2662 @@
+{
+  "schemaVersion": 1,
+  "modelProviders": [
+    {
+      "id": "provider-item-2121ad7e",
+      "name": "DeepSeek",
+      "providerKey": "DeepSeek",
+      "baseUrl": "https://api.deepseek.com",
+      "apiKeyEnvName": "DEEPSEEK_API_KEY",
+      "defaultModel": "deepseek-chat",
+      "supportedModels": [
+        "deepseek-chat",
+        "deepseek-reasoner"
+      ],
+      "enabled": true,
+      "usageType": "both",
+      "isFallback": false,
+      "temperature": 0.2,
+      "maxTokens": 1200,
+      "timeoutMs": 30000,
+      "retryCount": 2,
+      "createdAt": "2026-06-17T03:29:42.009Z",
+      "updatedAt": "2026-06-17T05:20:28.535Z"
+    },
+    {
+      "id": "provider-local-mock",
+      "name": "Local Mock",
+      "providerKey": "local_mock",
+      "baseUrl": "",
+      "apiKeyEnvName": "",
+      "defaultModel": "local-mock-email-ai",
+      "supportedModels": [
+        "local-mock-email-ai"
+      ],
+      "enabled": true,
+      "usageType": "both",
+      "isFallback": true,
+      "temperature": 0.2,
+      "maxTokens": 1200,
+      "timeoutMs": 5000,
+      "retryCount": 0
+    }
+  ],
+  "riskRules": [
+    {
+      "id": "risk-low-general-question",
+      "name": "低风险普通咨询",
+      "riskLevel": "low",
+      "keywords": [
+        "product",
+        "material",
+        "size",
+        "color",
+        "stock",
+        "产品",
+        "材质",
+        "尺寸",
+        "颜色",
+        "库存",
+        "咨询"
+      ],
+      "semanticDescription": "普通售前或产品基础咨询，不涉及投诉、退款、赔偿、平台处罚或强烈情绪。",
+      "conditionType": "keyword_or_semantic",
+      "priority": 10,
+      "suggestedAction": "draft_only",
+      "enabled": true,
+      "version": 1,
+      "notes": "默认只生成草稿，由工作台决定是否允许后续动作。",
+      "createdAt": "2026-07-01T02:25:35.369Z",
+      "updatedAt": "2026-07-01T02:28:58.480Z"
+    },
+    {
+      "id": "risk-low-logistics-query",
+      "name": "低风险物流查询",
+      "riskLevel": "low",
+      "keywords": [
+        "shipping information",
+        "tracking number",
+        "物流查询",
+        "物流单号",
+        "发货时间普通询问"
+      ],
+      "semanticDescription": "普通物流状态询问，不包含异常、催促、投诉或承诺诉求。",
+      "conditionType": "keyword_or_semantic",
+      "priority": 9,
+      "suggestedAction": "draft_only",
+      "enabled": true,
+      "version": 1,
+      "notes": "仅确认收到并引导补充订单定位信息。",
+      "createdAt": "2026-07-01T02:25:35.369Z",
+      "updatedAt": "2026-07-01T02:28:58.480Z"
+    },
+    {
+      "id": "risk-medium-customer-unhappy",
+      "name": "中风险客户不满",
+      "riskLevel": "medium",
+      "keywords": [
+        "not satisfied",
+        "unhappy",
+        "disappointed",
+        "worried",
+        "asked many times",
+        "不满意",
+        "焦急",
+        "多次追问",
+        "催促"
+      ],
+      "semanticDescription": "客户表达不满、焦急或反复追问，但尚未明确投诉、退款、赔偿或法律威胁。",
+      "conditionType": "keyword_or_semantic",
+      "priority": 30,
+      "suggestedAction": "human_review",
+      "enabled": true,
+      "version": 1,
+      "notes": "生成草稿但需要人工审核。",
+      "createdAt": "2026-07-01T02:25:35.369Z",
+      "updatedAt": "2026-07-01T02:28:58.480Z"
+    },
+    {
+      "id": "risk-medium-logistics-abnormal",
+      "name": "中风险物流异常",
+      "riskLevel": "medium",
+      "keywords": [
+        "logistics abnormal",
+        "delayed",
+        "delay",
+        "package not moving",
+        "not received any update",
+        "物流异常",
+        "发货延迟",
+        "没有更新",
+        "包裹异常"
+      ],
+      "semanticDescription": "物流异常、延迟或客户催促履约，不能自动承诺发货或到货时间。",
+      "conditionType": "keyword_or_semantic",
+      "priority": 35,
+      "suggestedAction": "human_review",
+      "enabled": true,
+      "version": 1,
+      "notes": "需要人工核对物流状态。",
+      "createdAt": "2026-07-01T02:25:35.369Z",
+      "updatedAt": "2026-07-01T02:28:58.480Z"
+    },
+    {
+      "id": "risk-high-refund-dispute",
+      "name": "高风险退款争议",
+      "riskLevel": "high",
+      "keywords": [
+        "refund",
+        "return",
+        "chargeback",
+        "退款",
+        "退货",
+        "拒付",
+        "退钱"
+      ],
+      "semanticDescription": "客户明确要求退款、退货或发生支付争议。",
+      "conditionType": "keyword_or_semantic",
+      "priority": 80,
+      "suggestedAction": "human_review",
+      "enabled": true,
+      "version": 1,
+      "notes": "禁止自动发送，进入人工处理。",
+      "createdAt": "2026-07-01T02:25:35.369Z",
+      "updatedAt": "2026-07-01T02:28:58.480Z"
+    },
+    {
+      "id": "risk-high-legal-threat",
+      "name": "高风险法律威胁",
+      "riskLevel": "high",
+      "keywords": [
+        "lawyer",
+        "legal",
+        "court",
+        "fraud",
+        "scam",
+        "律师",
+        "法院",
+        "法律",
+        "欺诈",
+        "诈骗"
+      ],
+      "semanticDescription": "涉及律师、法院、法律责任、欺诈或虚假宣传。",
+      "conditionType": "keyword_or_semantic",
+      "priority": 95,
+      "suggestedAction": "human_review",
+      "enabled": true,
+      "version": 1,
+      "notes": "只允许内部建议。",
+      "createdAt": "2026-07-01T02:25:35.369Z",
+      "updatedAt": "2026-07-01T02:28:58.480Z"
+    },
+    {
+      "id": "risk-high-platform-complaint",
+      "name": "高风险平台投诉",
+      "riskLevel": "high",
+      "keywords": [
+        "complain to platform",
+        "platform complaint",
+        "platform penalty",
+        "投诉平台",
+        "平台投诉",
+        "平台处罚"
+      ],
+      "semanticDescription": "客户或平台官方提到投诉、处罚或平台介入。",
+      "conditionType": "keyword_or_semantic",
+      "priority": 90,
+      "suggestedAction": "human_review",
+      "enabled": true,
+      "version": 1,
+      "notes": "涉及平台声誉和处罚风险。",
+      "createdAt": "2026-07-01T02:25:35.369Z",
+      "updatedAt": "2026-07-01T02:28:58.480Z"
+    },
+    {
+      "id": "risk-high-bad-review-threat",
+      "name": "高风险差评威胁",
+      "riskLevel": "high",
+      "keywords": [
+        "bad review",
+        "negative review",
+        "one star",
+        "差评",
+        "负面评价",
+        "一星"
+      ],
+      "semanticDescription": "客户威胁差评或负面公开评价。",
+      "conditionType": "keyword_or_semantic",
+      "priority": 85,
+      "suggestedAction": "human_review",
+      "enabled": true,
+      "version": 1,
+      "notes": "品牌声誉风险，不能自动承诺。",
+      "createdAt": "2026-07-01T02:25:35.369Z",
+      "updatedAt": "2026-07-01T02:28:58.480Z"
+    },
+    {
+      "id": "risk-low-faq-presale-standard",
+      "name": "低风险售前标准咨询",
+      "riskLevel": "low",
+      "keywords": [
+        "ship to",
+        "deliver to",
+        "delivery address",
+        "customs fee",
+        "shipping fee",
+        "tax",
+        "delivery time",
+        "how long",
+        "where are you located",
+        "physical store",
+        "online store",
+        "origin",
+        "made in",
+        "engraving",
+        "ship from",
+        "可以发货",
+        "送货到",
+        "税费",
+        "海关费",
+        "运费",
+        "关税",
+        "送货时间",
+        "需要多长时间",
+        "多久送到",
+        "从哪里发货",
+        "制造",
+        "手表制作",
+        "实体店",
+        "线上店",
+        "刻字",
+        "雕刻"
+      ],
+      "semanticDescription": "售前基础咨询，可基于 FAQ 标准话术回复；不涉及订单状态、售后处理、退款、赔偿或物流事实核查。",
+      "conditionType": "keyword_or_semantic",
+      "priority": 18,
+      "suggestedAction": "draft_only",
+      "enabled": true,
+      "version": 1,
+      "notes": "来自常见问题及回复话术.docx，作为低风险售前 FAQ 入口。",
+      "createdAt": "2026-07-01T02:25:35.369Z",
+      "updatedAt": "2026-07-01T02:28:58.480Z"
+    },
+    {
+      "id": "risk-high-faq-order-fulfillment",
+      "name": "高风险售中订单履约",
+      "riskLevel": "high",
+      "keywords": [
+        "order status",
+        "when will my order ship",
+        "when will ship",
+        "ship my order",
+        "tracking number",
+        "tracking information",
+        "logistics update",
+        "package stuck",
+        "package not moving",
+        "cancel order",
+        "cancel and refund",
+        "shipping delay",
+        "delayed shipment",
+        "订单状态",
+        "什么时候发货",
+        "交货日期",
+        "什么时候收到",
+        "出货",
+        "跟踪号码",
+        "追踪信息",
+        "物流更新",
+        "包裹信息",
+        "取消订单",
+        "取消并退款",
+        "物流不动",
+        "包裹卡住",
+        "包裹停滞",
+        "物流轨迹无更新"
+      ],
+      "semanticDescription": "售中订单履约、发货、物流、取消订单等问题需要核对仓库、订单或物流系统，禁止自动承诺。",
+      "conditionType": "keyword_or_semantic",
+      "priority": 88,
+      "suggestedAction": "human_review",
+      "enabled": true,
+      "version": 1,
+      "notes": "来自常见问题及回复话术.docx，命中后只允许人工审核后发送。",
+      "createdAt": "2026-07-01T02:25:35.369Z",
+      "updatedAt": "2026-07-01T02:28:58.480Z"
+    },
+    {
+      "id": "risk-high-faq-aftersale-watch",
+      "name": "高风险售后手表问题",
+      "riskLevel": "high",
+      "keywords": [
+        "not received package",
+        "delivered but not received",
+        "quality issue",
+        "poor quality",
+        "defective",
+        "not working",
+        "watch does not work",
+        "time is slow",
+        "running slow",
+        "waterproof",
+        "water resistant",
+        "strap too long",
+        "strap too short",
+        "return",
+        "exchange",
+        "replacement",
+        "not as expected",
+        "do not like",
+        "未收到包裹",
+        "已签收未收到",
+        "未收到货",
+        "质量糟糕",
+        "不符合期望",
+        "有缺陷",
+        "手表不工作",
+        "走时不准",
+        "退货",
+        "退回",
+        "换货",
+        "更换",
+        "调整时间",
+        "调整日期",
+        "走时慢",
+        "运行时间短",
+        "只能用几小时",
+        "防水",
+        "防水等级",
+        "洗澡",
+        "游泳",
+        "表带尺寸",
+        "太长了",
+        "太短",
+        "不喜欢",
+        "不想要了"
+      ],
+      "semanticDescription": "售后包裹、质量、退换货、使用指导、表带和防水等问题均需要人工核对订单、证据、政策或附件。",
+      "conditionType": "keyword_or_semantic",
+      "priority": 86,
+      "suggestedAction": "human_review",
+      "enabled": true,
+      "version": 1,
+      "notes": "来自常见问题及回复话术.docx，作为售后高风险入口。",
+      "createdAt": "2026-07-01T02:25:35.369Z",
+      "updatedAt": "2026-07-01T02:28:58.480Z"
+    }
+  ],
+  "spamRules": [
+    {
+      "id": "spam-ad-promotion",
+      "name": "广告推广",
+      "ruleType": "promotion",
+      "keywords": [
+        "promotion",
+        "advertising",
+        "seo",
+        "backlinks",
+        "推广",
+        "广告",
+        "外链"
+      ],
+      "senderEmails": [],
+      "senderDomains": [],
+      "urlPatterns": [],
+      "priority": 50,
+      "suggestedAction": "ignore_spam",
+      "enabled": true,
+      "version": 1,
+      "notes": "明显广告和外链推广。"
+    },
+    {
+      "id": "spam-suspicious-link",
+      "name": "可疑链接",
+      "ruleType": "suspicious_link",
+      "keywords": [
+        "click here",
+        "login now",
+        "verify account",
+        "点击链接",
+        "立即登录",
+        "验证账户"
+      ],
+      "senderEmails": [],
+      "senderDomains": [],
+      "urlPatterns": [
+        "bit.ly",
+        "tinyurl",
+        "login-verify",
+        "account-secure"
+      ],
+      "priority": 70,
+      "suggestedAction": "block_auto_reply",
+      "enabled": true,
+      "version": 1,
+      "notes": "诱导点击或可疑短链。"
+    },
+    {
+      "id": "spam-unrelated-marketing",
+      "name": "无关营销",
+      "ruleType": "irrelevant_marketing",
+      "keywords": [
+        "casino",
+        "loan",
+        "invoice service",
+        "mass marketing",
+        "赌博",
+        "贷款",
+        "发票",
+        "刷单",
+        "代运营"
+      ],
+      "senderEmails": [],
+      "senderDomains": [],
+      "urlPatterns": [],
+      "priority": 60,
+      "suggestedAction": "ignore_spam",
+      "enabled": true,
+      "version": 1,
+      "notes": "无关灰产或营销内容。"
+    },
+    {
+      "id": "spam-garbled-mail",
+      "name": "乱码邮件",
+      "ruleType": "garbled",
+      "keywords": [
+        "乱码",
+        "无效内容",
+        "asdfasdf",
+        "qwertyuiop",
+        "test spam"
+      ],
+      "senderEmails": [],
+      "senderDomains": [],
+      "urlPatterns": [],
+      "priority": 40,
+      "suggestedAction": "ignore_spam",
+      "enabled": true,
+      "version": 1,
+      "notes": "正文大量乱码或模板重复。"
+    },
+    {
+      "id": "spam-phishing",
+      "name": "钓鱼邮件",
+      "ruleType": "phishing",
+      "keywords": [
+        "password expired",
+        "account suspended",
+        "verify your mailbox",
+        "密码过期",
+        "账户暂停",
+        "钓鱼"
+      ],
+      "senderEmails": [],
+      "senderDomains": [],
+      "urlPatterns": [
+        "password",
+        "mailbox-login",
+        "verify"
+      ],
+      "priority": 90,
+      "suggestedAction": "block_auto_reply",
+      "enabled": true,
+      "version": 1,
+      "notes": "可疑登录或凭证诱导。"
+    }
+  ],
+  "knowledgeBase": [
+    {
+      "id": "kb-product-general",
+      "title": "普通产品咨询回复",
+      "category": "产品信息咨询",
+      "applicableRiskLevels": [
+        "low"
+      ],
+      "keywords": [
+        "product",
+        "material",
+        "size",
+        "color",
+        "stock",
+        "产品",
+        "材质",
+        "尺寸",
+        "颜色",
+        "库存"
+      ],
+      "customerScenario": "客户询问产品基础信息。",
+      "standardReply": "Hello, thank you for reaching out. We have received your product question. Please share the specific style, size, material or color you are interested in, and our support team will help confirm the details.",
+      "forbiddenExpressions": [
+        "guarantee",
+        "always available",
+        "一定有货"
+      ],
+      "recommendedTone": "polite",
+      "allowForAutoReply": false,
+      "requireHumanReview": false,
+      "priority": 30,
+      "enabled": true,
+      "version": 1,
+      "notes": "低风险产品咨询草稿。",
+      "createdAt": "2026-07-01T02:25:35.369Z",
+      "updatedAt": "2026-07-01T02:28:58.480Z"
+    },
+    {
+      "id": "kb-logistics-query",
+      "title": "物流查询回复",
+      "category": "物流咨询",
+      "applicableRiskLevels": [
+        "low",
+        "medium"
+      ],
+      "keywords": [
+        "shipping",
+        "tracking",
+        "package",
+        "logistics",
+        "物流",
+        "快递",
+        "包裹"
+      ],
+      "customerScenario": "客户询问物流或包裹状态。",
+      "standardReply": "Hello, we have received your shipping inquiry. To avoid inaccurate information, please share your order number or order email if available, and our support team will check the latest shipping status.",
+      "forbiddenExpressions": [
+        "arrive tomorrow",
+        "already shipped",
+        "一定到货",
+        "马上发货"
+      ],
+      "recommendedTone": "polite",
+      "allowForAutoReply": false,
+      "requireHumanReview": true,
+      "priority": 25,
+      "enabled": true,
+      "version": 1,
+      "notes": "物流状态需人工核对。",
+      "createdAt": "2026-07-01T02:25:35.369Z",
+      "updatedAt": "2026-07-01T02:28:58.480Z"
+    },
+    {
+      "id": "kb-shipping-delay",
+      "title": "发货延迟安抚回复",
+      "category": "发货延迟",
+      "applicableRiskLevels": [
+        "medium"
+      ],
+      "keywords": [
+        "delay",
+        "delayed",
+        "not received any update",
+        "发货延迟",
+        "没有更新"
+      ],
+      "customerScenario": "客户催促发货或物流长时间无更新。",
+      "standardReply": "Hello, we understand your concern. We have received your message and will ask support to verify the order and shipping status before replying with confirmed information.",
+      "forbiddenExpressions": [
+        "ship today",
+        "arrive tomorrow",
+        "guaranteed delivery",
+        "今天发货",
+        "明天到"
+      ],
+      "recommendedTone": "calm",
+      "allowForAutoReply": false,
+      "requireHumanReview": true,
+      "priority": 40,
+      "enabled": true,
+      "version": 1,
+      "notes": "安抚但不承诺时效。",
+      "createdAt": "2026-07-01T02:25:35.369Z",
+      "updatedAt": "2026-07-01T02:28:58.480Z"
+    },
+    {
+      "id": "kb-refund-cautious",
+      "title": "退款咨询谨慎回复",
+      "category": "退款咨询",
+      "applicableRiskLevels": [
+        "high"
+      ],
+      "keywords": [
+        "refund",
+        "return",
+        "退款",
+        "退货"
+      ],
+      "customerScenario": "客户询问退款或退货。",
+      "standardReply": "",
+      "forbiddenExpressions": [
+        "we will refund",
+        "refund approved",
+        "可以退款",
+        "马上退款"
+      ],
+      "recommendedTone": "calm",
+      "allowForAutoReply": false,
+      "requireHumanReview": true,
+      "priority": 90,
+      "enabled": true,
+      "version": 1,
+      "notes": "高风险只生成内部建议。",
+      "createdAt": "2026-07-01T02:25:35.369Z",
+      "updatedAt": "2026-07-01T02:28:58.480Z"
+    },
+    {
+      "id": "kb-complaint-internal",
+      "title": "投诉类内部建议",
+      "category": "投诉安抚",
+      "applicableRiskLevels": [
+        "high"
+      ],
+      "keywords": [
+        "complaint",
+        "complain",
+        "bad review",
+        "投诉",
+        "差评"
+      ],
+      "customerScenario": "投诉、差评或平台投诉风险。",
+      "standardReply": "",
+      "forbiddenExpressions": [
+        "we admit fault",
+        "compensation",
+        "承认责任",
+        "赔偿"
+      ],
+      "recommendedTone": "calm",
+      "allowForAutoReply": false,
+      "requireHumanReview": true,
+      "priority": 95,
+      "enabled": true,
+      "version": 1,
+      "notes": "提醒人工核对平台规则和订单事实。",
+      "createdAt": "2026-07-01T02:25:35.369Z",
+      "updatedAt": "2026-07-01T02:28:58.480Z"
+    },
+    {
+      "id": "kb-high-risk-no-auto-reply",
+      "title": "高风险邮件禁止自动回复说明",
+      "category": "高风险内部建议",
+      "applicableRiskLevels": [
+        "high"
+      ],
+      "keywords": [
+        "legal",
+        "lawyer",
+        "platform",
+        "chargeback",
+        "法律",
+        "律师",
+        "平台",
+        "拒付"
+      ],
+      "customerScenario": "法律、平台、拒付或品牌风险。",
+      "standardReply": "",
+      "forbiddenExpressions": [
+        "legal responsibility",
+        "we are responsible",
+        "法律责任",
+        "我们负责"
+      ],
+      "recommendedTone": "internal",
+      "allowForAutoReply": false,
+      "requireHumanReview": true,
+      "priority": 100,
+      "enabled": true,
+      "version": 1,
+      "notes": "仅用于内部建议，不生成客户可见回复。",
+      "createdAt": "2026-07-01T02:25:35.369Z",
+      "updatedAt": "2026-07-01T02:28:58.480Z"
+    },
+    {
+      "id": "kb-faq-shipping-destination",
+      "title": "售前：询问是否可送货",
+      "category": "售前咨询",
+      "applicableRiskLevels": [
+        "low"
+      ],
+      "keywords": [
+        "ship to",
+        "deliver to",
+        "delivery address",
+        "can you ship",
+        "可以发货",
+        "送货到",
+        "寄到",
+        "配送到"
+      ],
+      "customerScenario": "客户询问是否可以送货到某个国家、地区或地址。",
+      "standardReply": "我们只可以送货到部分国家，你可以尝试通过我们的官网下单，如果可以成功下单，那么我们可以为你安排送货，否则无法送货。",
+      "forbiddenExpressions": [
+        "所有国家都可以送",
+        "一定可以送达",
+        "guaranteed delivery to every country"
+      ],
+      "recommendedTone": "polite",
+      "allowForAutoReply": true,
+      "requireHumanReview": false,
+      "priority": 54,
+      "enabled": true,
+      "version": 1,
+      "notes": "支持直接确认送货的地区包括美、英、法、德、意、加拿大、澳洲、日、韩、港、澳、台、泰、菲律宾、马来西亚、新加坡、西班牙、葡萄牙、智利、阿根廷、墨西哥、荷兰、瑞典、瑞士、比利时、捷克、波兰、阿联酋、科威特、沙特、卡塔尔、巴林、南非等；其他地区使用标准回复。",
+      "createdAt": "2026-07-01T02:25:35.369Z",
+      "updatedAt": "2026-07-01T02:28:58.480Z",
+      "standardReplyEn": "We can only ship to selected countries and regions. You may try placing an order on our official website. If the order can be completed successfully, we can arrange delivery for you; otherwise, we are unable to ship to that address."
+    },
+    {
+      "id": "kb-faq-taxes-customs-shipping-fee",
+      "title": "售前：税费、海关费、运费",
+      "category": "售前咨询",
+      "applicableRiskLevels": [
+        "low"
+      ],
+      "keywords": [
+        "tax",
+        "customs fee",
+        "shipping fee",
+        "duty",
+        "税费",
+        "海关费",
+        "运费",
+        "关税"
+      ],
+      "customerScenario": "客户询问税费、海关费、运费或关税由谁承担。",
+      "standardReply": "一般客户只需支付手表的费用，我们会直接发货到你的地址。税费和海关费由我们承担。订单满150美金我们提供免运费服务。",
+      "forbiddenExpressions": [
+        "永久免税",
+        "任何订单都免运费",
+        "no customs in every case"
+      ],
+      "recommendedTone": "polite",
+      "allowForAutoReply": true,
+      "requireHumanReview": false,
+      "priority": 53,
+      "enabled": true,
+      "version": 1,
+      "notes": "低风险售前 FAQ，可作为税费与运费口径。",
+      "createdAt": "2026-07-01T02:25:35.369Z",
+      "updatedAt": "2026-07-01T02:28:58.480Z",
+      "standardReplyEn": "In general, customers only need to pay for the watch, and we will ship it directly to your address. Taxes and customs fees are covered by us. We also offer free shipping for orders over USD 150."
+    },
+    {
+      "id": "kb-faq-delivery-time",
+      "title": "售前：询问送货时间",
+      "category": "售前咨询",
+      "applicableRiskLevels": [
+        "low"
+      ],
+      "keywords": [
+        "delivery time",
+        "shipping time",
+        "how long",
+        "when arrive",
+        "运输",
+        "需要多长时间",
+        "多久",
+        "什么时候送到"
+      ],
+      "customerScenario": "客户询问不同地区大概送货时间。",
+      "standardReply": "欧盟地区6-10天，亚洲地区5-8天，港澳台2-4天，中东地区7-15天，东南亚6-9天，南美洲地区8-15天，北美地区6-9天，南非9-17天，澳洲6-10天。需根据客户询问的地址对应回复时间，具体送货时间取决于物流商。",
+      "forbiddenExpressions": [
+        "一定到货",
+        "保证到货",
+        "arrive on an exact date",
+        "guaranteed delivery date"
+      ],
+      "recommendedTone": "polite",
+      "allowForAutoReply": true,
+      "requireHumanReview": false,
+      "priority": 52,
+      "enabled": true,
+      "version": 1,
+      "notes": "只回答区域预估时效，不承诺具体日期。",
+      "createdAt": "2026-07-01T02:25:35.369Z",
+      "updatedAt": "2026-07-01T02:28:58.480Z",
+      "standardReplyEn": "Estimated delivery time depends on the destination: EU 6-10 days, Asia 5-8 days, Hong Kong/Macau/Taiwan 2-4 days, Middle East 7-15 days, Southeast Asia 6-9 days, South America 8-15 days, North America 6-9 days, South Africa 9-17 days, and Australia 6-10 days. The exact delivery time depends on the logistics provider."
+    },
+    {
+      "id": "kb-faq-origin-and-shipping-location",
+      "title": "售前：原产地和发货地",
+      "category": "售前咨询",
+      "applicableRiskLevels": [
+        "low"
+      ],
+      "keywords": [
+        "origin",
+        "made in",
+        "manufactured",
+        "ship from",
+        "从哪里发货",
+        "制造",
+        "手表制作",
+        "原产地",
+        "发货地"
+      ],
+      "customerScenario": "客户询问手表原产地、制作地、团队或仓库所在地。",
+      "standardReply": "您可以把你感兴趣的手表图片发送给我看下吗？我们的大部分手表机芯是从日本和瑞士采购的。表带从中国的工厂生产，然后在中国的仓库组装手表并发货。我们的团队在香港，我们在香港、中国大陆、阿联酋以及美国都有仓库。",
+      "forbiddenExpressions": [
+        "全部瑞士制造",
+        "全部日本制造",
+        "made entirely in Switzerland"
+      ],
+      "recommendedTone": "polite",
+      "allowForAutoReply": true,
+      "requireHumanReview": false,
+      "priority": 51,
+      "enabled": true,
+      "version": 1,
+      "notes": "涉及具体款式时，先让客户提供图片再回复。",
+      "createdAt": "2026-07-01T02:25:35.369Z",
+      "updatedAt": "2026-07-01T02:28:58.480Z",
+      "standardReplyEn": "Could you please send us a picture of the watch you are interested in? Most of our watch movements are sourced from Japan and Switzerland. The straps are produced by factories in China, and the watches are assembled and shipped from our warehouse in China. Our team is based in Hong Kong, and we have warehouses in Hong Kong, Mainland China, the UAE, and the United States."
+    },
+    {
+      "id": "kb-faq-store-location",
+      "title": "售前：店铺位置",
+      "category": "售前咨询",
+      "applicableRiskLevels": [
+        "low"
+      ],
+      "keywords": [
+        "store location",
+        "physical store",
+        "offline store",
+        "where are you located",
+        "位于哪里",
+        "线上店",
+        "实体店",
+        "位置",
+        "线下店"
+      ],
+      "customerScenario": "客户询问是否有实体店、线下店或店铺位置。",
+      "standardReply": "我们只有线上店，我们的团队在香港，我们在香港、中国大陆、阿联酋以及美国都有仓库。",
+      "forbiddenExpressions": [
+        "欢迎到门店",
+        "可以线下自提",
+        "offline pickup available"
+      ],
+      "recommendedTone": "polite",
+      "allowForAutoReply": true,
+      "requireHumanReview": false,
+      "priority": 50,
+      "enabled": true,
+      "version": 1,
+      "notes": "明确只有线上店，不引导线下到访。",
+      "createdAt": "2026-07-01T02:25:35.369Z",
+      "updatedAt": "2026-07-01T02:28:58.480Z",
+      "standardReplyEn": "We only have an online store. Our team is based in Hong Kong, and we have warehouses in Hong Kong, Mainland China, the UAE, and the United States."
+    },
+    {
+      "id": "kb-faq-engraving",
+      "title": "售前：是否可以刻字",
+      "category": "售前咨询",
+      "applicableRiskLevels": [
+        "low"
+      ],
+      "keywords": [
+        "engraving",
+        "engrave",
+        "watch back",
+        "刻字",
+        "添加刻字",
+        "雕刻",
+        "手表背面"
+      ],
+      "customerScenario": "客户询问是否可以在手表背面刻字。",
+      "standardReply": "我们可以在不锈钢手表的背面刻字。刻字字符是10-12个字符，刻字字体可以选择：Arial，ScriptC，Gothice。",
+      "forbiddenExpressions": [
+        "任何材质都可以刻字",
+        "不限字符",
+        "any material can be engraved"
+      ],
+      "recommendedTone": "polite",
+      "allowForAutoReply": true,
+      "requireHumanReview": false,
+      "priority": 49,
+      "enabled": true,
+      "version": 1,
+      "notes": "低风险售前 FAQ；如客户提供具体刻字内容，仍建议人工抽查。",
+      "createdAt": "2026-07-01T02:25:35.369Z",
+      "updatedAt": "2026-07-01T02:28:58.480Z",
+      "standardReplyEn": "We can engrave text on the back of stainless steel watches. The engraving can be 10-12 characters, and the available fonts are Arial, ScriptC, and Gothice."
+    },
+    {
+      "id": "kb-faq-order-shipping-delay",
+      "title": "售中：催发货",
+      "category": "售中订单",
+      "applicableRiskLevels": [
+        "medium",
+        "high"
+      ],
+      "keywords": [
+        "order status",
+        "when will ship",
+        "shipping delay",
+        "delayed shipment",
+        "什么时候发货",
+        "交货日期",
+        "出货",
+        "什么时候收到",
+        "催发货"
+      ],
+      "customerScenario": "客户催促发货、询问出货或交货日期。",
+      "standardReply": "非常抱歉，我和仓库核实了一下，最近由于订单量较大，因此导致手表组装速度较慢，因此发货延迟了，你的手表目前还在组装和测试阶段，我们预计本周内会为你发货，发货后，我们将通过电子邮件向您发送运单号，以便您追踪包裹的运送状态。",
+      "forbiddenExpressions": [
+        "今天发货",
+        "马上发货",
+        "保证本周发货",
+        "ship today",
+        "guaranteed shipment"
+      ],
+      "recommendedTone": "calm",
+      "allowForAutoReply": false,
+      "requireHumanReview": true,
+      "priority": 92,
+      "enabled": true,
+      "version": 1,
+      "notes": "高风险：必须先与仓库确认。预售产品口径：生产时间约30天，生产完成后组装并测试，预计下周发货；具体时间须人工核实后再发送。",
+      "createdAt": "2026-07-01T02:25:35.369Z",
+      "updatedAt": "2026-07-01T02:28:58.480Z"
+    },
+    {
+      "id": "kb-faq-logistics-tracking",
+      "title": "售中：物流咨询",
+      "category": "售中订单",
+      "applicableRiskLevels": [
+        "medium",
+        "high"
+      ],
+      "keywords": [
+        "tracking number",
+        "tracking information",
+        "logistics update",
+        "package information",
+        "订单状态",
+        "跟踪号码",
+        "追踪信息",
+        "物流更新",
+        "包裹信息"
+      ],
+      "customerScenario": "客户询问运单号、追踪信息或包裹物流。",
+      "standardReply": "你的订单已经发货了，跟踪号码是[人工填写真实运单号]，你可以通过这个链接追踪物流信息：https://www.17track.net/en",
+      "forbiddenExpressions": [
+        "123",
+        "已发货但未核对",
+        "随便填写运单号",
+        "fake tracking number"
+      ],
+      "recommendedTone": "polite",
+      "allowForAutoReply": false,
+      "requireHumanReview": true,
+      "priority": 91,
+      "enabled": true,
+      "version": 1,
+      "notes": "高风险：必须从订单或物流系统核对真实运单号后发送，不得保留占位符。",
+      "createdAt": "2026-07-01T02:25:35.369Z",
+      "updatedAt": "2026-07-01T02:28:58.480Z"
+    },
+    {
+      "id": "kb-faq-cancel-order",
+      "title": "售中：取消订单",
+      "category": "售中订单",
+      "applicableRiskLevels": [
+        "medium",
+        "high"
+      ],
+      "keywords": [
+        "cancel order",
+        "cancel and refund",
+        "取消订单",
+        "取消并退款"
+      ],
+      "customerScenario": "客户要求取消订单或取消并退款。",
+      "standardReply": "得知您考虑取消订单，我们深表遗憾。能否请您告知具体情况及取消原因？您的反馈对我们至关重要，有助于我们更好地了解情况并改进服务。收到您的回复后，我们将很乐意为您提供进一步协助，并为您寻找最合适的解决方案。",
+      "forbiddenExpressions": [
+        "马上取消",
+        "马上退款",
+        "已同意退款",
+        "refund approved",
+        "cancelled already"
+      ],
+      "recommendedTone": "calm",
+      "allowForAutoReply": false,
+      "requireHumanReview": true,
+      "priority": 96,
+      "enabled": true,
+      "version": 1,
+      "notes": "高风险：取消与退款必须人工核对订单状态和政策。",
+      "createdAt": "2026-07-01T02:25:35.369Z",
+      "updatedAt": "2026-07-01T02:28:58.480Z"
+    },
+    {
+      "id": "kb-faq-logistics-abnormal",
+      "title": "售中：物流异常",
+      "category": "售中订单",
+      "applicableRiskLevels": [
+        "medium",
+        "high"
+      ],
+      "keywords": [
+        "package not moving",
+        "package stuck",
+        "logistics no update",
+        "物流不动",
+        "几天没更新",
+        "包裹卡住了",
+        "物流轨迹无更新",
+        "包裹停滞"
+      ],
+      "customerScenario": "客户反馈物流停滞、几天未更新或包裹卡住。",
+      "standardReply": "非常抱歉给您带来的不便，我查询到你的包裹目前在[人工填写地点]，但物流轨迹已经几天没更新了，我已经联系物流商请他们联系尾程服务商调查包裹并帮忙催促尽快安排运输了，请您再耐心等待一段时间，一旦有消息我们会尽快更新物流。",
+      "forbiddenExpressions": [
+        "已催促但未核实",
+        "一定马上更新",
+        "guaranteed update",
+        "arrive tomorrow"
+      ],
+      "recommendedTone": "calm",
+      "allowForAutoReply": false,
+      "requireHumanReview": true,
+      "priority": 90,
+      "enabled": true,
+      "version": 1,
+      "notes": "高风险：必须核对物流轨迹和地点，不得保留占位符。",
+      "createdAt": "2026-07-01T02:25:35.369Z",
+      "updatedAt": "2026-07-01T02:28:58.480Z"
+    },
+    {
+      "id": "kb-faq-delivered-not-received",
+      "title": "售后：包裹签收未收到",
+      "category": "售后服务",
+      "applicableRiskLevels": [
+        "medium",
+        "high"
+      ],
+      "keywords": [
+        "delivered but not received",
+        "not received package",
+        "not received order",
+        "没有收到包裹",
+        "已签收未收到",
+        "未收到货"
+      ],
+      "customerScenario": "物流显示签收，但客户表示没有收到包裹。",
+      "standardReply": "我查询了你的包裹信息，物流显示您的包裹已经签收了，附上物流商提供的签收证明供你查看。你能否查看一下监控，看下你的房子周围或者是邮箱，或者问问你的邻居或者家人是否收到了你的包裹？如果您在检查后仍无法找到包裹，请尽快告知我们，以便我们协助您联系物流服务商进行后续处理。",
+      "forbiddenExpressions": [
+        "一定丢件",
+        "我们马上补发",
+        "直接退款",
+        "we will reship",
+        "we will refund"
+      ],
+      "recommendedTone": "calm",
+      "allowForAutoReply": false,
+      "requireHumanReview": true,
+      "priority": 89,
+      "enabled": true,
+      "version": 1,
+      "notes": "高风险：需核对签收证明并确认是否有附件。",
+      "createdAt": "2026-07-01T02:25:35.369Z",
+      "updatedAt": "2026-07-01T02:28:58.480Z"
+    },
+    {
+      "id": "kb-faq-quality-complaint",
+      "title": "售后：质量不满",
+      "category": "售后服务",
+      "applicableRiskLevels": [
+        "medium",
+        "high"
+      ],
+      "keywords": [
+        "quality issue",
+        "poor quality",
+        "defective",
+        "not working",
+        "not satisfied",
+        "angry",
+        "质量糟糕",
+        "不符合期望",
+        "垃圾",
+        "有缺陷",
+        "手表不工作",
+        "走时不准",
+        "生气",
+        "不满"
+      ],
+      "customerScenario": "客户对质量不满、反馈缺陷或手表无法正常工作。",
+      "standardReply": "非常抱歉给您带来的不便，你能否提供一些照片或者视频展示一下手表的问题，以便我们仔细检查手表的问题并尽快给您提供合适的解决方案？希望可以尽快帮助你解决问题并让您满意，请尽快提供所需的信息。",
+      "forbiddenExpressions": [
+        "承认质量问题",
+        "一定赔偿",
+        "马上退款",
+        "we admit fault",
+        "compensation approved"
+      ],
+      "recommendedTone": "calm",
+      "allowForAutoReply": false,
+      "requireHumanReview": true,
+      "priority": 95,
+      "enabled": true,
+      "version": 1,
+      "notes": "高风险：需客户提供照片或视频，人工判断处理方案。",
+      "createdAt": "2026-07-01T02:25:35.369Z",
+      "updatedAt": "2026-07-01T02:28:58.480Z"
+    },
+    {
+      "id": "kb-faq-return-request",
+      "title": "售后：退货",
+      "category": "售后服务",
+      "applicableRiskLevels": [
+        "medium",
+        "high"
+      ],
+      "keywords": [
+        "return item",
+        "return order",
+        "send back",
+        "退货",
+        "退回"
+      ],
+      "customerScenario": "客户希望退回订单或咨询退货。",
+      "standardReply": "得知您希望退回订单，我们深表遗憾。能否请您告知具体情况及退货原因？这些信息将有助于我们更好地了解您的状况，从而为您提供更快捷、更合适的解决方案。收到您的反馈后，我们将尽快协助您办理退货事宜。",
+      "forbiddenExpressions": [
+        "退货已批准",
+        "马上退款",
+        "无条件退回",
+        "return approved",
+        "refund approved"
+      ],
+      "recommendedTone": "calm",
+      "allowForAutoReply": false,
+      "requireHumanReview": true,
+      "priority": 94,
+      "enabled": true,
+      "version": 1,
+      "notes": "高风险：需人工核对退货政策和订单状态。",
+      "createdAt": "2026-07-01T02:25:35.369Z",
+      "updatedAt": "2026-07-01T02:28:58.480Z"
+    },
+    {
+      "id": "kb-faq-exchange-request",
+      "title": "售后：换货",
+      "category": "售后服务",
+      "applicableRiskLevels": [
+        "medium",
+        "high"
+      ],
+      "keywords": [
+        "exchange",
+        "replace with another watch",
+        "replacement",
+        "换货",
+        "退回",
+        "更换",
+        "换成另一款手表"
+      ],
+      "customerScenario": "客户希望换成另一款手表。",
+      "standardReply": "我们很乐意为你提供换货服务，请让我们知道你想换货成哪个手表，如果可以，请把图片发送给我们以便我们查看一下并核实是否有差价。",
+      "forbiddenExpressions": [
+        "已确认换货",
+        "无需补差价",
+        "免费更换",
+        "exchange approved"
+      ],
+      "recommendedTone": "polite",
+      "allowForAutoReply": false,
+      "requireHumanReview": true,
+      "priority": 93,
+      "enabled": true,
+      "version": 1,
+      "notes": "高风险：涉及换货和差价，必须人工审核。",
+      "createdAt": "2026-07-01T02:25:35.369Z",
+      "updatedAt": "2026-07-01T02:28:58.480Z"
+    },
+    {
+      "id": "kb-faq-adjust-time-date",
+      "title": "售后：调整时间和日期",
+      "category": "售后服务",
+      "applicableRiskLevels": [
+        "medium",
+        "high"
+      ],
+      "keywords": [
+        "adjust time",
+        "adjust date",
+        "set time",
+        "set date",
+        "调整时间",
+        "调整日期",
+        "如何调整"
+      ],
+      "customerScenario": "客户询问如何调整手表时间或日期。",
+      "standardReply": "随后附上一个关于调整日期和时间的指导视频，希望对你有帮助，请查收附件。",
+      "forbiddenExpressions": [
+        "附件已附上但实际未上传",
+        "video attached when missing",
+        "see attachment without attachment"
+      ],
+      "recommendedTone": "polite",
+      "allowForAutoReply": false,
+      "requireHumanReview": true,
+      "priority": 82,
+      "enabled": true,
+      "version": 1,
+      "notes": "高风险：必须确认指导视频或附件已准备好后再发送。",
+      "createdAt": "2026-07-01T02:25:35.369Z",
+      "updatedAt": "2026-07-01T02:28:58.480Z"
+    },
+    {
+      "id": "kb-faq-mechanical-watch-power",
+      "title": "售后：机械手表走时慢或运行时间短",
+      "category": "售后服务",
+      "applicableRiskLevels": [
+        "medium",
+        "high"
+      ],
+      "keywords": [
+        "running slow",
+        "time is slow",
+        "only works for a few hours",
+        "power reserve",
+        "走时慢",
+        "运行时间短",
+        "只能用几小时"
+      ],
+      "customerScenario": "客户反馈自动机械表走时慢、停走或运行时间短。",
+      "standardReply": "自动机械手表需要佩戴8小时以上并且你的手腕活动要足够才能让手表储存够足够的能量。自动机械表依靠手腕的运动来储存能量。如果您每天佩戴时间少于8小时，或长时间不佩戴，主发条就会耗尽能量，导致手表走时变慢甚至停止。您是否可以试一下佩戴八小时，或者手动给手表上弦，大约转动40-50圈即可上满链，然后再观察一下效果吗？",
+      "forbiddenExpressions": [
+        "一定不是质量问题",
+        "保证恢复正常",
+        "definitely not defective"
+      ],
+      "recommendedTone": "polite",
+      "allowForAutoReply": false,
+      "requireHumanReview": true,
+      "priority": 83,
+      "enabled": true,
+      "version": 1,
+      "notes": "高风险：涉及售后判断，需人工审核后发送。",
+      "createdAt": "2026-07-01T02:25:35.369Z",
+      "updatedAt": "2026-07-01T02:28:58.480Z"
+    },
+    {
+      "id": "kb-faq-water-resistance",
+      "title": "售后：手表防水",
+      "category": "售后服务",
+      "applicableRiskLevels": [
+        "medium",
+        "high"
+      ],
+      "keywords": [
+        "waterproof",
+        "water resistant",
+        "water resistance",
+        "shower",
+        "swim",
+        "防水吗",
+        "防水等级",
+        "洗澡",
+        "游泳"
+      ],
+      "customerScenario": "客户询问防水等级，或是否能戴着洗澡、游泳。",
+      "standardReply": "我们的手表防水等级是3ATM，它可以防日常雨水和洗手时的水溅。不建议戴着它洗澡或者游泳。",
+      "forbiddenExpressions": [
+        "可以游泳",
+        "可以洗澡",
+        "完全防水",
+        "fully waterproof"
+      ],
+      "recommendedTone": "polite",
+      "allowForAutoReply": false,
+      "requireHumanReview": true,
+      "priority": 84,
+      "enabled": true,
+      "version": 1,
+      "notes": "高风险：可能涉及售后争议，需人工审核。",
+      "createdAt": "2026-07-01T02:25:35.369Z",
+      "updatedAt": "2026-07-01T02:28:58.480Z"
+    },
+    {
+      "id": "kb-faq-stainless-steel-band-size",
+      "title": "售后：不锈钢表带尺寸过长或过短",
+      "category": "售后服务",
+      "applicableRiskLevels": [
+        "medium",
+        "high"
+      ],
+      "keywords": [
+        "strap too long",
+        "strap too short",
+        "bracelet too long",
+        "bracelet too short",
+        "band size",
+        "表带尺寸",
+        "太长了",
+        "太短",
+        "链节"
+      ],
+      "customerScenario": "客户反馈不锈钢表带太长或太短。",
+      "standardReply": "如果表带太短：这个手表的表带是可调节的，你能否确认一下你一共需要几个额外的表链节？我们很乐意为你免费补发额外的表链节并发送到同一个地址给你。如果表带太长：这个手表的表带是可以拆下额外链节的，即使拆下额外链节，表带仍不适合你的手腕吗？你能否测量一下你的手腕尺寸，并告诉我们，我们很乐意询问仓库是否可以按照你的尺寸为你定制一条短表带。",
+      "forbiddenExpressions": [
+        "直接免费补发",
+        "一定可以定制",
+        "we will reship for free",
+        "custom strap guaranteed"
+      ],
+      "recommendedTone": "polite",
+      "allowForAutoReply": false,
+      "requireHumanReview": true,
+      "priority": 85,
+      "enabled": true,
+      "version": 1,
+      "notes": "高风险：涉及补发或定制，必须人工确认。",
+      "createdAt": "2026-07-01T02:25:35.369Z",
+      "updatedAt": "2026-07-01T02:28:58.480Z"
+    },
+    {
+      "id": "kb-faq-personal-return-retention",
+      "title": "售后：个人原因想退货",
+      "category": "售后服务",
+      "applicableRiskLevels": [
+        "medium",
+        "high"
+      ],
+      "keywords": [
+        "not as expected",
+        "do not like",
+        "changed my mind",
+        "want to return",
+        "退货退回",
+        "不符合期望",
+        "不喜欢",
+        "不想要了"
+      ],
+      "customerScenario": "客户因个人原因、不喜欢或不符合期望想退货。",
+      "standardReply": "很抱歉听到我们的手表没有达到您的期望。为了尽快解决问题，您是否愿意保留这个手表？我们很乐意给您提供10%的折扣，可以吗？此外，我们也可以为你提供换货服务，你对我们商店里的其他手表款式感兴趣吗？我们很乐意为你提供换货服务。",
+      "forbiddenExpressions": [
+        "折扣已批准",
+        "退款已批准",
+        "无条件退货",
+        "discount approved",
+        "refund approved"
+      ],
+      "recommendedTone": "calm",
+      "allowForAutoReply": false,
+      "requireHumanReview": true,
+      "priority": 97,
+      "enabled": true,
+      "version": 1,
+      "notes": "高风险：涉及折扣、挽留、换货或退货，必须人工确认。",
+      "createdAt": "2026-07-01T02:25:35.369Z",
+      "updatedAt": "2026-07-01T02:28:58.480Z"
+    }
+  ],
+  "promptTemplates": [
+    {
+      "id": "prompt-risk-check",
+      "name": "风险判定提示词",
+      "promptType": "risk_check",
+      "systemPrompt": "You are the risk and intent classifier for a customer service email agent.\nClassify the email by business intent first, then assign spam, low, medium or high risk.\nLow risk is limited to generic pre-sales FAQ questions that do not require order, warehouse, logistics, refund, return, exchange, compensation, legal or platform verification.\nAny order-specific status, shipping fact, cancellation, refund, return, exchange, quality complaint, missing package, attachment-dependent answer, discount, compensation, legal threat, platform complaint or bad-review threat requires human review.",
+      "taskPrompt": "Return a strict JSON object with spam, risk, matched rules, suggested action and human-review reason.\nUse high risk when the agent would need to verify order data, logistics data, warehouse status, evidence, attachments, after-sales policy or financial decisions before replying.\nUse medium risk for unclear intent, mild dissatisfaction or incomplete information that still needs a human check.\nUse low risk only for standard pre-sales FAQ answers from the approved knowledge base.",
+      "outputFormat": {
+        "spam": {
+          "isSpam": false,
+          "confidence": 0,
+          "reasons": []
+        },
+        "risk": {
+          "level": "low",
+          "reasons": [],
+          "matchedRules": []
+        },
+        "finalAction": "draft_only"
+      },
+      "enabled": true,
+      "version": 1,
+      "notes": "按“售前低风险、售中售后人工审核”的现有逻辑重写。",
+      "createdAt": "2026-07-01T02:25:35.369Z",
+      "updatedAt": "2026-07-01T02:28:58.480Z"
+    },
+    {
+      "id": "prompt-reply-generation",
+      "name": "回复生成提示词",
+      "promptType": "reply_generation",
+      "systemPrompt": "You are the reply drafting skill inside an email agent.\nThe approved knowledge base is the primary reference standard. Preserve its facts, constraints, forbidden expressions and human-review flags.\nCustomer-facing replies must use the same language as the customer email. If the knowledge base standard reply is Chinese, translate it faithfully into the customer language without adding new facts.\nNever fabricate order status, tracking numbers, warehouse checks, delivery dates, attachments, refund approvals, replacement approvals, discounts, compensation, legal conclusions or platform outcomes.",
+      "taskPrompt": "Return strict JSON with reply.draft, reply.translationZh, reply.internalSuggestion and reply.tone.\nFor low-risk FAQ matches, draft a concise customer-facing reply based on the matched standardReply.\nFor medium or high risk, or when a matched knowledge entry has requireHumanReview=true, keep customer-facing commitments conservative. If facts must be verified or placeholders are present, leave draft empty and put the suggested handling plus matched standardReply in internalSuggestion.\nDo not include placeholders such as 123, [tracking number], [人工填写], [附件] in a customer-facing draft.\nDo not send or imply refunds, returns, exchanges, discounts, compensation, free reshipment, exact shipment time or fault admission unless a human has confirmed it.",
+      "outputFormat": {
+        "reply": {
+          "draft": "",
+          "translationZh": "",
+          "internalSuggestion": "",
+          "tone": "polite"
+        }
+      },
+      "enabled": true,
+      "version": 1,
+      "notes": "以知识库标准话术为主，支持全球语言同语种回复；中高风险默认内部建议。",
+      "createdAt": "2026-07-01T02:25:35.369Z",
+      "updatedAt": "2026-07-01T02:28:58.480Z"
+    },
+    {
+      "id": "prompt-output-format",
+      "name": "输出格式提示词",
+      "promptType": "output_safety_check",
+      "systemPrompt": "Return a strict JSON object for the email workbench. Do not include markdown fences or prose outside JSON.",
+      "taskPrompt": "The workbench parses spam, risk, reply, safety and finalAction from JSON.\nSet safety.needHumanReview=true when the draft includes or depends on unverified order facts, logistics facts, attachments, refunds, returns, exchanges, discounts, compensation, legal statements, platform claims or placeholders.\nSet safety.blocked=true when the draft contains forbidden promises, fabricated facts or customer-facing placeholders.",
+      "outputFormat": {
+        "spam": {
+          "isSpam": false,
+          "confidence": 0.2,
+          "reasons": []
+        },
+        "risk": {
+          "level": "low",
+          "reasons": [],
+          "matchedRules": []
+        },
+        "reply": {
+          "draft": "",
+          "internalSuggestion": "",
+          "tone": "polite"
+        },
+        "safety": {
+          "needHumanReview": false,
+          "blocked": false,
+          "reasons": []
+        },
+        "finalAction": "draft_only"
+      },
+      "enabled": true,
+      "version": 1,
+      "notes": "统一输出格式。",
+      "createdAt": "2026-07-01T02:25:35.369Z",
+      "updatedAt": "2026-07-01T02:28:58.480Z"
+    }
+  ],
+  "outputSafetyRules": [
+    {
+      "id": "safety-no-refund-promise",
+      "name": "禁止承诺退款",
+      "keywords": [
+        "we will refund",
+        "refund approved",
+        "refund today",
+        "可以退款",
+        "马上退款",
+        "同意退款",
+        "承诺退款"
+      ],
+      "semanticDescription": "禁止在自动回复中承诺退款或退款时间。",
+      "riskLevel": "high",
+      "triggerAction": "block_auto_reply",
+      "enabled": true,
+      "version": 1,
+      "notes": "资金相关承诺必须人工审核。",
+      "createdAt": "2026-07-01T02:25:35.369Z",
+      "updatedAt": "2026-07-01T02:28:58.480Z"
+    },
+    {
+      "id": "safety-no-compensation-promise",
+      "name": "禁止承诺赔偿",
+      "keywords": [
+        "compensate",
+        "compensation",
+        "赔偿",
+        "补偿",
+        "赔付"
+      ],
+      "semanticDescription": "禁止承诺赔偿、补偿或优惠。",
+      "riskLevel": "high",
+      "triggerAction": "block_auto_reply",
+      "enabled": true,
+      "version": 1,
+      "notes": "利益让渡必须人工确认。",
+      "createdAt": "2026-07-01T02:25:35.369Z",
+      "updatedAt": "2026-07-01T02:28:58.480Z"
+    },
+    {
+      "id": "safety-no-reship-promise",
+      "name": "禁止承诺补发",
+      "keywords": [
+        "reship",
+        "send a replacement",
+        "补发",
+        "重新发货"
+      ],
+      "semanticDescription": "禁止承诺补发或重新发货。",
+      "riskLevel": "high",
+      "triggerAction": "human_review",
+      "enabled": true,
+      "version": 1,
+      "notes": "补发需核对订单和售后规则。",
+      "createdAt": "2026-07-01T02:25:35.369Z",
+      "updatedAt": "2026-07-01T02:28:58.480Z"
+    },
+    {
+      "id": "safety-no-legal-liability",
+      "name": "禁止承认法律责任",
+      "keywords": [
+        "we are legally responsible",
+        "admit liability",
+        "legal responsibility",
+        "承认法律责任",
+        "我们负责法律问题"
+      ],
+      "semanticDescription": "禁止承认法律责任或作出法律结论。",
+      "riskLevel": "high",
+      "triggerAction": "block_auto_reply",
+      "enabled": true,
+      "version": 1,
+      "notes": "法律风险必须人工处理。",
+      "createdAt": "2026-07-01T02:25:35.369Z",
+      "updatedAt": "2026-07-01T02:28:58.480Z"
+    },
+    {
+      "id": "safety-no-fabricated-order",
+      "name": "禁止编造订单信息",
+      "keywords": [
+        "your order is confirmed",
+        "order has been changed",
+        "订单已修改",
+        "订单正常",
+        "已确认订单"
+      ],
+      "semanticDescription": "禁止在未核对系统时编造订单状态。",
+      "riskLevel": "medium",
+      "triggerAction": "human_review",
+      "enabled": true,
+      "version": 1,
+      "notes": "订单信息必须从系统核对。",
+      "createdAt": "2026-07-01T02:25:35.369Z",
+      "updatedAt": "2026-07-01T02:28:58.480Z"
+    },
+    {
+      "id": "safety-no-fabricated-logistics",
+      "name": "禁止编造物流信息",
+      "keywords": [
+        "already shipped",
+        "tracking number",
+        "will arrive tomorrow",
+        "arrive tomorrow",
+        "已经发货",
+        "物流单号",
+        "明天到货"
+      ],
+      "semanticDescription": "禁止编造物流状态、物流单号或到货时间。",
+      "riskLevel": "medium",
+      "triggerAction": "human_review",
+      "enabled": true,
+      "version": 1,
+      "notes": "物流必须核对后再回复。",
+      "createdAt": "2026-07-01T02:25:35.369Z",
+      "updatedAt": "2026-07-01T02:28:58.480Z"
+    },
+    {
+      "id": "safety-no-absolute-expression",
+      "name": "禁止绝对化表达",
+      "keywords": [
+        "guarantee",
+        "always",
+        "never",
+        "一定",
+        "保证",
+        "绝对"
+      ],
+      "semanticDescription": "避免绝对化和过度承诺表达。",
+      "riskLevel": "medium",
+      "triggerAction": "human_review",
+      "enabled": true,
+      "version": 1,
+      "notes": "客服表达应克制。",
+      "createdAt": "2026-07-01T02:25:35.369Z",
+      "updatedAt": "2026-07-01T02:28:58.480Z"
+    }
+  ],
+  "configVersions": [
+    {
+      "id": "version-fc58dfa3-2e97-4fe2-8677-cee05d1cf89d",
+      "versionName": "Email AI 2026-06-17",
+      "status": "published",
+      "modelConfig": [
+        {
+          "id": "provider-item-2121ad7e",
+          "name": "DeepSeek",
+          "providerKey": "DeepSeek",
+          "baseUrl": "https://api.deepseek.com",
+          "apiKeyEnvName": "DEEPSEEK_API_KEY",
+          "defaultModel": "deepseek-chat",
+          "supportedModels": [
+            "deepseek-chat",
+            "deepseek-reasoner"
+          ],
+          "enabled": true,
+          "usageType": "both",
+          "isFallback": false,
+          "temperature": 0.2,
+          "maxTokens": 1200,
+          "timeoutMs": 30000,
+          "retryCount": 2,
+          "createdAt": "2026-06-17T03:29:42.009Z",
+          "updatedAt": "2026-06-17T05:20:28.535Z"
+        },
+        {
+          "id": "provider-local-mock",
+          "name": "Local Mock",
+          "providerKey": "local_mock",
+          "baseUrl": "",
+          "apiKeyEnvName": "",
+          "defaultModel": "local-mock-email-ai",
+          "supportedModels": [
+            "local-mock-email-ai"
+          ],
+          "enabled": true,
+          "usageType": "both",
+          "isFallback": true,
+          "temperature": 0.2,
+          "maxTokens": 1200,
+          "timeoutMs": 5000,
+          "retryCount": 0
+        }
+      ],
+      "riskRulesSnapshot": [
+        {
+          "id": "risk-low-general-question",
+          "name": "低风险普通咨询",
+          "riskLevel": "low",
+          "keywords": [
+            "product",
+            "material",
+            "size",
+            "color",
+            "stock",
+            "产品",
+            "材质",
+            "尺寸",
+            "颜色",
+            "库存"
+          ],
+          "semanticDescription": "普通咨询，不涉及投诉、退款、赔偿、差评、平台处罚或严重情绪。",
+          "conditionType": "keyword_or_semantic",
+          "priority": 10,
+          "suggestedAction": "draft_only",
+          "enabled": true,
+          "version": 1,
+          "notes": "默认只生成草稿。"
+        },
+        {
+          "id": "risk-low-logistics-query",
+          "name": "低风险物流查询",
+          "riskLevel": "low",
+          "keywords": [
+            "shipping information",
+            "tracking number",
+            "物流查询",
+            "物流单号"
+          ],
+          "semanticDescription": "普通物流状态询问，不包含异常、催促、投诉或承诺诉求。",
+          "conditionType": "keyword_or_semantic",
+          "priority": 9,
+          "suggestedAction": "draft_only",
+          "enabled": true,
+          "version": 1,
+          "notes": "只确认收到并引导补充定位信息。"
+        },
+        {
+          "id": "risk-medium-customer-unhappy",
+          "name": "中风险客户不满",
+          "riskLevel": "medium",
+          "keywords": [
+            "not satisfied",
+            "unhappy",
+            "disappointed",
+            "worried",
+            "asked many times",
+            "不满意",
+            "焦急",
+            "多次追问",
+            "催促"
+          ],
+          "semanticDescription": "客户表达不满、焦急或反复追问，但尚未明确投诉、退款、赔偿或法律威胁。",
+          "conditionType": "keyword_or_semantic",
+          "priority": 30,
+          "suggestedAction": "human_review",
+          "enabled": true,
+          "version": 1,
+          "notes": "需要人工审核。"
+        },
+        {
+          "id": "risk-medium-logistics-abnormal",
+          "name": "中风险物流异常",
+          "riskLevel": "medium",
+          "keywords": [
+            "logistics abnormal",
+            "delayed",
+            "delay",
+            "package not moving",
+            "not received any update",
+            "物流异常",
+            "发货延迟",
+            "没有更新"
+          ],
+          "semanticDescription": "物流异常、延迟或客户催促履约，不能自动承诺发货或到货时间。",
+          "conditionType": "keyword_or_semantic",
+          "priority": 35,
+          "suggestedAction": "human_review",
+          "enabled": true,
+          "version": 1,
+          "notes": "需要人工核对物流状态。"
+        },
+        {
+          "id": "risk-high-refund-dispute",
+          "name": "高风险退款争议",
+          "riskLevel": "high",
+          "keywords": [
+            "refund",
+            "return",
+            "chargeback",
+            "退款",
+            "退货",
+            "拒付",
+            "退钱"
+          ],
+          "semanticDescription": "客户明确要求退款、退货或发生支付争议。",
+          "conditionType": "keyword_or_semantic",
+          "priority": 80,
+          "suggestedAction": "human_review",
+          "enabled": true,
+          "version": 1,
+          "notes": "禁止自动发送。"
+        },
+        {
+          "id": "risk-high-legal-threat",
+          "name": "高风险法律威胁",
+          "riskLevel": "high",
+          "keywords": [
+            "lawyer",
+            "legal",
+            "court",
+            "fraud",
+            "scam",
+            "律师",
+            "法院",
+            "法律",
+            "欺诈",
+            "诈骗"
+          ],
+          "semanticDescription": "涉及律师、法院、法律责任、欺诈或虚假宣传。",
+          "conditionType": "keyword_or_semantic",
+          "priority": 95,
+          "suggestedAction": "human_review",
+          "enabled": true,
+          "version": 1,
+          "notes": "只允许内部建议。"
+        },
+        {
+          "id": "risk-high-platform-complaint",
+          "name": "高风险平台投诉",
+          "riskLevel": "high",
+          "keywords": [
+            "complain to platform",
+            "platform complaint",
+            "platform penalty",
+            "投诉平台",
+            "平台投诉",
+            "平台处罚"
+          ],
+          "semanticDescription": "客户或平台官方提到投诉、处罚或平台介入。",
+          "conditionType": "keyword_or_semantic",
+          "priority": 90,
+          "suggestedAction": "human_review",
+          "enabled": true,
+          "version": 1,
+          "notes": "平台声誉和处罚风险。"
+        },
+        {
+          "id": "risk-high-bad-review-threat",
+          "name": "高风险差评威胁",
+          "riskLevel": "high",
+          "keywords": [
+            "bad review",
+            "negative review",
+            "one star",
+            "差评",
+            "负面评价",
+            "一星"
+          ],
+          "semanticDescription": "客户威胁差评或负面公开评价。",
+          "conditionType": "keyword_or_semantic",
+          "priority": 85,
+          "suggestedAction": "human_review",
+          "enabled": true,
+          "version": 1,
+          "notes": "品牌声誉风险。"
+        }
+      ],
+      "spamRulesSnapshot": [
+        {
+          "id": "spam-ad-promotion",
+          "name": "广告推广",
+          "ruleType": "promotion",
+          "keywords": [
+            "promotion",
+            "advertising",
+            "seo",
+            "backlinks",
+            "推广",
+            "广告",
+            "外链"
+          ],
+          "senderEmails": [],
+          "senderDomains": [],
+          "urlPatterns": [],
+          "priority": 50,
+          "suggestedAction": "ignore_spam",
+          "enabled": true,
+          "version": 1,
+          "notes": "明显广告和外链推广。"
+        },
+        {
+          "id": "spam-suspicious-link",
+          "name": "可疑链接",
+          "ruleType": "suspicious_link",
+          "keywords": [
+            "click here",
+            "login now",
+            "verify account",
+            "点击链接",
+            "立即登录",
+            "验证账户"
+          ],
+          "senderEmails": [],
+          "senderDomains": [],
+          "urlPatterns": [
+            "bit.ly",
+            "tinyurl",
+            "login-verify",
+            "account-secure"
+          ],
+          "priority": 70,
+          "suggestedAction": "block_auto_reply",
+          "enabled": true,
+          "version": 1,
+          "notes": "诱导点击或可疑短链。"
+        },
+        {
+          "id": "spam-unrelated-marketing",
+          "name": "无关营销",
+          "ruleType": "irrelevant_marketing",
+          "keywords": [
+            "casino",
+            "loan",
+            "invoice service",
+            "mass marketing",
+            "赌博",
+            "贷款",
+            "发票",
+            "刷单",
+            "代运营"
+          ],
+          "senderEmails": [],
+          "senderDomains": [],
+          "urlPatterns": [],
+          "priority": 60,
+          "suggestedAction": "ignore_spam",
+          "enabled": true,
+          "version": 1,
+          "notes": "无关灰产或营销内容。"
+        },
+        {
+          "id": "spam-garbled-mail",
+          "name": "乱码邮件",
+          "ruleType": "garbled",
+          "keywords": [
+            "乱码",
+            "无效内容",
+            "asdfasdf",
+            "qwertyuiop",
+            "test spam"
+          ],
+          "senderEmails": [],
+          "senderDomains": [],
+          "urlPatterns": [],
+          "priority": 40,
+          "suggestedAction": "ignore_spam",
+          "enabled": true,
+          "version": 1,
+          "notes": "正文大量乱码或模板重复。"
+        },
+        {
+          "id": "spam-phishing",
+          "name": "钓鱼邮件",
+          "ruleType": "phishing",
+          "keywords": [
+            "password expired",
+            "account suspended",
+            "verify your mailbox",
+            "密码过期",
+            "账户暂停",
+            "钓鱼"
+          ],
+          "senderEmails": [],
+          "senderDomains": [],
+          "urlPatterns": [
+            "password",
+            "mailbox-login",
+            "verify"
+          ],
+          "priority": 90,
+          "suggestedAction": "block_auto_reply",
+          "enabled": true,
+          "version": 1,
+          "notes": "可疑登录或凭证诱导。"
+        }
+      ],
+      "knowledgeBaseSnapshot": [
+        {
+          "id": "kb-product-general",
+          "title": "普通产品咨询回复",
+          "category": "产品信息咨询",
+          "applicableRiskLevels": [
+            "low"
+          ],
+          "keywords": [
+            "product",
+            "material",
+            "size",
+            "color",
+            "stock",
+            "产品",
+            "材质",
+            "尺寸",
+            "颜色",
+            "库存"
+          ],
+          "customerScenario": "客户询问产品基础信息。",
+          "standardReply": "Hello, thank you for reaching out. We have received your product question. Please share the specific style, size, material or color you are interested in, and our support team will help confirm the details.",
+          "forbiddenExpressions": [
+            "guarantee",
+            "always available",
+            "一定有货"
+          ],
+          "recommendedTone": "polite",
+          "allowForAutoReply": false,
+          "requireHumanReview": false,
+          "priority": 30,
+          "enabled": true,
+          "version": 1,
+          "notes": "低风险产品咨询草稿。"
+        },
+        {
+          "id": "kb-logistics-query",
+          "title": "物流查询回复",
+          "category": "物流咨询",
+          "applicableRiskLevels": [
+            "low",
+            "medium"
+          ],
+          "keywords": [
+            "shipping",
+            "tracking",
+            "package",
+            "logistics",
+            "物流",
+            "快递",
+            "包裹"
+          ],
+          "customerScenario": "客户询问物流或包裹状态。",
+          "standardReply": "Hello, we have received your shipping inquiry. To avoid inaccurate information, please share your order number or order email if available, and our support team will check the latest shipping status.",
+          "forbiddenExpressions": [
+            "arrive tomorrow",
+            "already shipped",
+            "一定到货",
+            "马上发货"
+          ],
+          "recommendedTone": "polite",
+          "allowForAutoReply": false,
+          "requireHumanReview": true,
+          "priority": 25,
+          "enabled": true,
+          "version": 1,
+          "notes": "物流状态需人工核对。"
+        },
+        {
+          "id": "kb-shipping-delay",
+          "title": "发货延迟安抚回复",
+          "category": "发货延迟",
+          "applicableRiskLevels": [
+            "medium"
+          ],
+          "keywords": [
+            "delay",
+            "delayed",
+            "not received any update",
+            "发货延迟",
+            "没有更新"
+          ],
+          "customerScenario": "客户催促发货或物流无更新。",
+          "standardReply": "Hello, we understand your concern. We have received your message and will ask support to verify the order and shipping status before replying with confirmed information.",
+          "forbiddenExpressions": [
+            "ship today",
+            "arrive tomorrow",
+            "今天发货",
+            "明天到"
+          ],
+          "recommendedTone": "calm",
+          "allowForAutoReply": false,
+          "requireHumanReview": true,
+          "priority": 40,
+          "enabled": true,
+          "version": 1,
+          "notes": "安抚但不承诺时效。"
+        },
+        {
+          "id": "kb-refund-cautious",
+          "title": "退款咨询谨慎回复",
+          "category": "退款咨询",
+          "applicableRiskLevels": [
+            "high"
+          ],
+          "keywords": [
+            "refund",
+            "return",
+            "退款",
+            "退货"
+          ],
+          "customerScenario": "客户询问退款或退货。",
+          "standardReply": "",
+          "forbiddenExpressions": [
+            "we will refund",
+            "refund approved",
+            "可以退款",
+            "马上退款"
+          ],
+          "recommendedTone": "calm",
+          "allowForAutoReply": false,
+          "requireHumanReview": true,
+          "priority": 90,
+          "enabled": true,
+          "version": 1,
+          "notes": "高风险只生成内部建议。"
+        },
+        {
+          "id": "kb-complaint-internal",
+          "title": "投诉类内部建议",
+          "category": "投诉安抚",
+          "applicableRiskLevels": [
+            "high"
+          ],
+          "keywords": [
+            "complaint",
+            "complain",
+            "bad review",
+            "投诉",
+            "差评"
+          ],
+          "customerScenario": "投诉、差评或平台投诉风险。",
+          "standardReply": "",
+          "forbiddenExpressions": [
+            "we admit fault",
+            "compensation",
+            "承认责任",
+            "赔偿"
+          ],
+          "recommendedTone": "calm",
+          "allowForAutoReply": false,
+          "requireHumanReview": true,
+          "priority": 95,
+          "enabled": true,
+          "version": 1,
+          "notes": "提醒人工核对平台规则和订单事实。"
+        },
+        {
+          "id": "kb-high-risk-no-auto-reply",
+          "title": "高风险邮件禁止自动回复说明",
+          "category": "高风险内部建议",
+          "applicableRiskLevels": [
+            "high"
+          ],
+          "keywords": [
+            "legal",
+            "lawyer",
+            "platform",
+            "chargeback",
+            "法律",
+            "律师",
+            "平台",
+            "拒付"
+          ],
+          "customerScenario": "法律、平台、拒付或品牌风险。",
+          "standardReply": "",
+          "forbiddenExpressions": [
+            "legal responsibility",
+            "we are responsible",
+            "法律责任",
+            "我们负责"
+          ],
+          "recommendedTone": "internal",
+          "allowForAutoReply": false,
+          "requireHumanReview": true,
+          "priority": 100,
+          "enabled": true,
+          "version": 1,
+          "notes": "仅用于内部建议。"
+        }
+      ],
+      "promptTemplatesSnapshot": [
+        {
+          "id": "prompt-risk-check",
+          "name": "风险判定提示词",
+          "promptType": "risk_check",
+          "systemPrompt": "You classify customer emails into spam, low, medium or high risk.",
+          "taskPrompt": "Return spam, risk level, reasons, matched rules, suggested action and whether human review is required.",
+          "outputFormat": {
+            "spam": {
+              "isSpam": false,
+              "confidence": 0,
+              "reasons": []
+            },
+            "risk": {
+              "level": "low",
+              "reasons": [],
+              "matchedRules": []
+            },
+            "finalAction": "draft_only"
+          },
+          "enabled": true,
+          "version": 1,
+          "notes": "默认 mock 风险判定提示词。"
+        },
+        {
+          "id": "prompt-reply-generation",
+          "name": "回复生成提示词",
+          "promptType": "reply_generation",
+          "systemPrompt": "You draft cautious, polite support replies based on approved knowledge base entries.",
+          "taskPrompt": "Do not overpromise, admit liability, fabricate order or logistics data, or promise refund, compensation or reshipment.",
+          "outputFormat": {
+            "reply": {
+              "draft": "",
+              "internalSuggestion": "",
+              "tone": "polite"
+            }
+          },
+          "enabled": true,
+          "version": 1,
+          "notes": "默认 mock 回复生成提示词。"
+        },
+        {
+          "id": "prompt-output-format",
+          "name": "输出格式提示词",
+          "promptType": "output_safety_check",
+          "systemPrompt": "Return strict JSON for the email workbench.",
+          "taskPrompt": "The workbench parses spam, risk, reply, safety and finalAction from JSON.",
+          "outputFormat": {
+            "spam": {
+              "isSpam": false,
+              "confidence": 0.2,
+              "reasons": []
+            },
+            "risk": {
+              "level": "low",
+              "reasons": [],
+              "matchedRules": []
+            },
+            "reply": {
+              "draft": "",
+              "internalSuggestion": "",
+              "tone": "polite"
+            },
+            "safety": {
+              "needHumanReview": false,
+              "blocked": false,
+              "reasons": []
+            },
+            "finalAction": "draft_only"
+          },
+          "enabled": true,
+          "version": 1,
+          "notes": "统一输出格式。"
+        }
+      ],
+      "outputSafetyRulesSnapshot": [
+        {
+          "id": "safety-no-refund-promise",
+          "name": "禁止承诺退款",
+          "keywords": [
+            "we will refund",
+            "refund approved",
+            "refund today",
+            "可以退款",
+            "马上退款",
+            "同意退款",
+            "承诺退款"
+          ],
+          "semanticDescription": "禁止在自动回复中承诺退款或退款时间。",
+          "riskLevel": "high",
+          "triggerAction": "block_auto_reply",
+          "enabled": true,
+          "version": 1,
+          "notes": "资金相关承诺必须人工审核。"
+        },
+        {
+          "id": "safety-no-compensation-promise",
+          "name": "禁止承诺赔偿",
+          "keywords": [
+            "compensate",
+            "compensation",
+            "赔偿",
+            "补偿",
+            "赔付"
+          ],
+          "semanticDescription": "禁止承诺赔偿、补偿或优惠。",
+          "riskLevel": "high",
+          "triggerAction": "block_auto_reply",
+          "enabled": true,
+          "version": 1,
+          "notes": "利益让渡必须人工确认。"
+        },
+        {
+          "id": "safety-no-reship-promise",
+          "name": "禁止承诺补发",
+          "keywords": [
+            "reship",
+            "send a replacement",
+            "补发",
+            "重新发货"
+          ],
+          "semanticDescription": "禁止承诺补发或重新发货。",
+          "riskLevel": "high",
+          "triggerAction": "human_review",
+          "enabled": true,
+          "version": 1,
+          "notes": "补发需核对订单和售后规则。"
+        },
+        {
+          "id": "safety-no-legal-liability",
+          "name": "禁止承认法律责任",
+          "keywords": [
+            "we are legally responsible",
+            "admit liability",
+            "legal responsibility",
+            "承认法律责任",
+            "我们负责法律问题"
+          ],
+          "semanticDescription": "禁止承认法律责任或作出法律结论。",
+          "riskLevel": "high",
+          "triggerAction": "block_auto_reply",
+          "enabled": true,
+          "version": 1,
+          "notes": "法律风险必须人工处理。"
+        },
+        {
+          "id": "safety-no-fabricated-order",
+          "name": "禁止编造订单信息",
+          "keywords": [
+            "your order is confirmed",
+            "order has been changed",
+            "订单已修改",
+            "订单正常",
+            "已确认订单"
+          ],
+          "semanticDescription": "禁止在未核对系统时编造订单状态。",
+          "riskLevel": "medium",
+          "triggerAction": "human_review",
+          "enabled": true,
+          "version": 1,
+          "notes": "订单信息必须从系统核对。"
+        },
+        {
+          "id": "safety-no-fabricated-logistics",
+          "name": "禁止编造物流信息",
+          "keywords": [
+            "already shipped",
+            "tracking number",
+            "will arrive tomorrow",
+            "arrive tomorrow",
+            "已经发货",
+            "物流单号",
+            "明天到货"
+          ],
+          "semanticDescription": "禁止编造物流状态、物流单号或到货时间。",
+          "riskLevel": "medium",
+          "triggerAction": "human_review",
+          "enabled": true,
+          "version": 1,
+          "notes": "物流必须核对后再回复。"
+        },
+        {
+          "id": "safety-no-absolute-expression",
+          "name": "禁止绝对化表达",
+          "keywords": [
+            "guarantee",
+            "always",
+            "never",
+            "一定",
+            "保证",
+            "绝对"
+          ],
+          "semanticDescription": "避免绝对化和过度承诺表达。",
+          "riskLevel": "medium",
+          "triggerAction": "human_review",
+          "enabled": true,
+          "version": 1,
+          "notes": "客服表达应克制。"
+        }
+      ],
+      "strategyConfigSnapshot": {
+        "lowRiskDefaultAction": "auto_send_allowed",
+        "mediumRiskDefaultAction": "human_review",
+        "highRiskDefaultAction": "human_review",
+        "spamDefaultAction": "ignore_spam"
+      },
+      "publishNote": "",
+      "publishedBy": null,
+      "publishedAt": "2026-06-17T05:31:41.210Z",
+      "createdAt": "2026-06-17T05:31:36.938Z",
+      "updatedAt": "2026-06-17T05:31:41.210Z"
+    }
+  ],
+  "testRuns": [
+    {
+      "id": "test-run-d7205ad1-dded-4b8d-92d7-4541c375d1a5",
+      "testInput": {
+        "senderEmail": "test@example.test",
+        "subject": "Where is my order?",
+        "body": "I want to know when my order will arrive.",
+        "versionSource": "published",
+        "useMock": true,
+        "mode": "full"
+      },
+      "testResult": {
+        "success": true,
+        "source": "email_auto_reply_workbench",
+        "configVersionId": "mock-default",
+        "spam": {
+          "isSpam": false,
+          "confidence": 0.05,
+          "matchedRules": []
+        },
+        "risk": {
+          "level": "medium",
+          "reasons": [
+            "未命中明确低风险规则，默认按中风险交由人工确认。"
+          ],
+          "matchedRules": []
+        },
+        "knowledgeBaseRefs": [],
+        "reply": {
+          "draft": "Dear Customer,\n\nThank you for reaching out regarding your order. I understand you’re eager to receive it.\n\nTo provide you with accurate information, could you please share your order number? This will allow me to check the current status and tracking details for you.\n\nPlease note that I can only share information based on our records and cannot guarantee specific delivery dates or make changes to shipping once an order is in transit.\n\nI look forward to your reply so I can assist you further.\n\nBest regards,\n[Your Name]",
+          "internalSuggestion": "",
+          "tone": "polite"
+        },
+        "safety": {
+          "needHumanReview": true,
+          "blocked": false,
+          "reasons": [
+            "禁止绝对化表达: 避免绝对化和过度承诺表达。"
+          ]
+        },
+        "finalAction": "human_review",
+        "model": {
+          "riskModelProvider": "DeepSeek",
+          "riskModel": "deepseek-chat",
+          "replyModelProvider": "DeepSeek",
+          "replyModel": "deepseek-chat"
+        }
+      },
+      "usedVersionId": "mock-default",
+      "usedMock": true,
+      "status": "passed",
+      "errorMessage": "",
+      "createdBy": null,
+      "createdAt": "2026-06-17T05:30:55.649Z"
+    },
+    {
+      "id": "test-run-e34c2190-a4d2-4abc-8920-7b30aa7eb7b2",
+      "testInput": {
+        "senderEmail": "test@example.test",
+        "subject": "Where is my order?",
+        "body": "I want to know when my order will arrive.",
+        "versionSource": "published",
+        "useMock": true,
+        "mode": "full"
+      },
+      "testResult": {
+        "success": true,
+        "source": "email_auto_reply_workbench",
+        "configVersionId": "mock-default",
+        "spam": {
+          "isSpam": false,
+          "confidence": 0.05,
+          "matchedRules": []
+        },
+        "risk": {
+          "level": "medium",
+          "reasons": [
+            "未命中明确低风险规则，默认按中风险交由人工确认。"
+          ],
+          "matchedRules": []
+        },
+        "knowledgeBaseRefs": [],
+        "reply": {
+          "draft": "Dear Customer,\n\nThank you for reaching out regarding your order. I understand you're eager to receive it.\n\nTo provide you with the most accurate information, could you please share your order number? This will allow me to check the current status and provide you with an update.\n\nWe appreciate your patience and will do our best to assist you.\n\nBest regards,\nCustomer Support Team",
+          "internalSuggestion": "",
+          "tone": "polite"
+        },
+        "safety": {
+          "needHumanReview": false,
+          "blocked": false,
+          "reasons": []
+        },
+        "finalAction": "human_review",
+        "model": {
+          "riskModelProvider": "DeepSeek",
+          "riskModel": "deepseek-chat",
+          "replyModelProvider": "DeepSeek",
+          "replyModel": "deepseek-chat"
+        }
+      },
+      "usedVersionId": "mock-default",
+      "usedMock": true,
+      "status": "passed",
+      "errorMessage": "",
+      "createdBy": null,
+      "createdAt": "2026-06-17T05:30:55.288Z"
+    },
+    {
+      "id": "test-run-20be8b63-79f9-4b9f-9475-819682b20c4b",
+      "testInput": {
+        "senderEmail": "test@example.test",
+        "subject": "Where is my order?",
+        "body": "I want to know when my order will arrive.",
+        "versionSource": "published",
+        "useMock": true,
+        "mode": "full"
+      },
+      "testResult": {
+        "success": true,
+        "source": "email_auto_reply_workbench",
+        "configVersionId": "mock-default",
+        "spam": {
+          "isSpam": false,
+          "confidence": 0.05,
+          "matchedRules": []
+        },
+        "risk": {
+          "level": "medium",
+          "reasons": [
+            "未命中明确低风险规则，默认按中风险交由人工确认。"
+          ],
+          "matchedRules": []
+        },
+        "knowledgeBaseRefs": [],
+        "reply": {
+          "draft": "Dear Customer,\n\nThank you for reaching out regarding your order. I understand you’re eager to receive it.\n\nBased on the information available to me, I can see that your order is currently in transit. For the most accurate and up-to-date tracking details, please refer to the tracking number provided in your shipping confirmation email. If you have not received this email, it may be in your spam or junk folder.\n\nIf you have any further questions or need assistance with tracking, please let me know, and I’ll be happy to help.\n\nBest regards,\nCustomer Support Team",
+          "internalSuggestion": "",
+          "tone": "polite"
+        },
+        "safety": {
+          "needHumanReview": true,
+          "blocked": false,
+          "reasons": [
+            "禁止编造物流信息: 禁止编造物流状态、物流单号或到货时间。"
+          ]
+        },
+        "finalAction": "human_review",
+        "model": {
+          "riskModelProvider": "DeepSeek",
+          "riskModel": "deepseek-chat",
+          "replyModelProvider": "DeepSeek",
+          "replyModel": "deepseek-chat"
+        }
+      },
+      "usedVersionId": "mock-default",
+      "usedMock": true,
+      "status": "passed",
+      "errorMessage": "",
+      "createdBy": null,
+      "createdAt": "2026-06-17T05:30:54.118Z"
+    },
+    {
+      "id": "test-run-763f9cb0-ba00-4859-aa99-70fc6da5656c",
+      "testInput": {
+        "senderEmail": "test@example.test",
+        "subject": "Where is my order?",
+        "body": "I want to know when my order will arrive.",
+        "versionSource": "published",
+        "useMock": true,
+        "mode": "full"
+      },
+      "testResult": {
+        "success": true,
+        "source": "email_auto_reply_workbench",
+        "configVersionId": "mock-default",
+        "spam": {
+          "isSpam": false,
+          "confidence": 0.05,
+          "matchedRules": []
+        },
+        "risk": {
+          "level": "medium",
+          "reasons": [
+            "未命中明确低风险规则，默认按中风险交由人工确认。"
+          ],
+          "matchedRules": []
+        },
+        "knowledgeBaseRefs": [],
+        "reply": {
+          "draft": "Dear Customer,\n\nThank you for reaching out regarding your order. I understand you're eager to receive it.\n\nTo provide you with the most accurate information, could you please share your order number or the email address used for the purchase? This will allow me to check the current status for you.\n\nPlease note that I can only provide updates based on the information available in our system. I will do my best to assist you.\n\nBest regards,\n[Your Name]",
+          "internalSuggestion": "",
+          "tone": "polite"
+        },
+        "safety": {
+          "needHumanReview": false,
+          "blocked": false,
+          "reasons": []
+        },
+        "finalAction": "human_review",
+        "model": {
+          "riskModelProvider": "DeepSeek",
+          "riskModel": "deepseek-chat",
+          "replyModelProvider": "DeepSeek",
+          "replyModel": "deepseek-chat"
+        }
+      },
+      "usedVersionId": "mock-default",
+      "usedMock": true,
+      "status": "passed",
+      "errorMessage": "",
+      "createdBy": null,
+      "createdAt": "2026-06-17T05:30:53.928Z"
+    }
+  ],
+  "strategyConfig": {
+    "lowRiskDefaultAction": "auto_send_allowed",
+    "mediumRiskDefaultAction": "human_review",
+    "highRiskDefaultAction": "human_review",
+    "spamDefaultAction": "ignore_spam"
+  },
+  "agentSkills": [
+    {
+      "id": "skill-translate-global-language",
+      "key": "translate_global_language",
+      "label": "全球语言识别与翻译",
+      "description": "识别客户来信语种，生成中文内部理解，并约束后续客户回复沿用客户语种。",
+      "enabled": true,
+      "order": 10,
+      "required": true,
+      "failurePolicy": "fail_closed",
+      "notes": "输入：邮件主题、正文和历史摘要。输出：customerLanguage、translationZh、translationSource。边界：翻译只用于内部理解，不改写客户事实；无法识别语种时默认英文并提示人工确认。",
+      "createdAt": "2026-07-01T02:28:58.480Z",
+      "updatedAt": "2026-07-01T02:28:58.480Z"
+    },
+    {
+      "id": "skill-classify-email",
+      "key": "classify_email",
+      "label": "邮件分类与意图识别",
+      "description": "识别咨询、售中、售后、退款、投诉、垃圾邮件等意图，并给出风险等级和建议动作。",
+      "enabled": true,
+      "order": 20,
+      "required": true,
+      "failurePolicy": "fail_closed",
+      "notes": "优先判垃圾邮件，再判业务意图。低风险限售前标准咨询；订单状态、物流事实、取消、退换货、质量、补发、折扣、法律、平台投诉和差评统一进入人工审核。",
+      "createdAt": "2026-07-01T02:28:58.480Z",
+      "updatedAt": "2026-07-01T02:28:58.480Z"
+    },
+    {
+      "id": "skill-retrieve-knowledge",
+      "key": "retrieve_knowledge",
+      "label": "知识库检索与依据选择",
+      "description": "按意图、关键词和风险等级检索 FAQ、政策、标准话术和禁用表达，作为回复主要依据。",
+      "enabled": true,
+      "order": 30,
+      "required": false,
+      "failurePolicy": "skip_optional",
+      "notes": "优先使用常见问题及回复话术知识库；命中多条时按 priority 选择最高优先级。不得把未命中的内容当作事实；无依据时转人工或只生成收集信息话术。",
+      "createdAt": "2026-07-01T02:28:58.480Z",
+      "updatedAt": "2026-07-01T02:28:58.480Z"
+    },
+    {
+      "id": "skill-draft-reply",
+      "key": "draft_reply",
+      "label": "回复草稿生成",
+      "description": "基于客户语种、风险结果和知识库标准话术生成可审核草稿或内部处理建议。",
+      "enabled": true,
+      "order": 40,
+      "required": true,
+      "failurePolicy": "fail_closed",
+      "notes": "低风险可生成客户可见草稿；中高风险优先生成内部建议。必须同语种回复，不编造订单、物流、仓库、附件、退款、补发、折扣、赔偿或法律结论。",
+      "createdAt": "2026-07-01T02:28:58.480Z",
+      "updatedAt": "2026-07-01T02:28:58.480Z"
+    },
+    {
+      "id": "skill-review-risk",
+      "key": "review_risk",
+      "label": "二次风险审核",
+      "description": "在生成后复查退款、法律、赔偿、补发、价格承诺、隐私、占位符和编造信息风险。",
+      "enabled": true,
+      "order": 50,
+      "required": true,
+      "failurePolicy": "fail_closed",
+      "notes": "发现高风险、禁用表达、占位符、未核实运单号、未上传附件却引用附件、承认责任或利益承诺时，必须阻断自动发送并转人工。",
+      "createdAt": "2026-07-01T02:28:58.480Z",
+      "updatedAt": "2026-07-01T02:28:58.480Z"
+    },
+    {
+      "id": "skill-human-feedback",
+      "key": "human_feedback",
+      "label": "人工反馈学习",
+      "description": "记录人工改判、人工修改、发送/归档/恢复系统判定和转人工原因，沉淀后续优化样本。",
+      "enabled": true,
+      "order": 60,
+      "required": false,
+      "failurePolicy": "skip_optional",
+      "notes": "保存人工原稿、AI 草稿、最终发送内容、风险改判、命中知识库和处理结果。后续用于优化关键词、知识库优先级和提示词边界。",
+      "createdAt": "2026-07-01T02:28:58.480Z",
+      "updatedAt": "2026-07-01T02:28:58.480Z"
+    }
+  ],
+  "agentPipeline": {
+    "enabled": true,
+    "traceEnabled": true,
+    "defaultFailurePolicy": "fail_closed"
+  }
+}

@@ -1,0 +1,231 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>飞书邮箱自动回复工作台</title>
+    <link rel="stylesheet" href="./src/styles.css?v=admin-control-dark-sweep-v2" />
+  </head>
+  <body>
+    <section class="login-overlay open" data-login-gate aria-label="工作台登录">
+      <div class="login-card" data-login-card></div>
+    </section>
+
+    <div class="app-shell" data-app-layout>
+      <div class="app-content">
+        <section class="overview-overlay open" data-overview-dashboard aria-label="邮件处理总览看板">
+          <div class="overview-dashboard" data-overview-content>
+            <div class="overview-loading">
+              <strong>正在加载邮件处理总览</strong>
+              <span>读取工作台数据后会自动生成看板。</span>
+            </div>
+          </div>
+        </section>
+
+        <header class="risk-topbar">
+          <section class="risk-summary-panel" aria-label="风险处理总览">
+            <div class="mini-heading">
+              <h2>我的工作台总览</h2>
+              <span>点击卡片筛选邮件队列</span>
+            </div>
+            <div class="metric-strip" data-summary></div>
+          </section>
+        </header>
+
+        <div class="workbench-shell">
+          <aside class="sidebar mail-sidebar">
+            <section class="mailbox-nav-panel" data-mailbox-nav aria-label="邮箱导航">
+              <div class="mailbox-nav-header">
+                <h2>邮箱</h2>
+                <div class="mailbox-nav-tools">
+                  <button type="button" data-mailbox-contact aria-label="联系人"><span class="mailbox-tool-icon contact" aria-hidden="true"></span></button>
+                  <button type="button" data-mailbox-list-toggle aria-label="列表"><span class="mailbox-tool-icon list" aria-hidden="true"></span></button>
+                </div>
+              </div>
+              <div class="mailbox-tool-panel" data-mailbox-contact-panel hidden>
+                <strong>联系人</strong>
+                <span>当前客户与发件人会随邮件列表同步。</span>
+              </div>
+              <div class="mailbox-tool-panel" data-mailbox-list-panel hidden>
+                <strong>列表视图</strong>
+                <span>使用邮箱分类筛选当前工作台邮件。</span>
+              </div>
+              <label class="mailbox-search">
+                <span>搜索</span>
+                <input data-mailbox-search type="search" placeholder="搜索邮件(⌘⇧F)" />
+              </label>
+              <button class="mailbox-home-button" type="button" data-open-overview>返回主页</button>
+              <nav class="mailbox-folder-list" aria-label="邮箱分类">
+                <div class="mailbox-menu-section open" data-mailbox-section="urgent">
+                  <button class="mailbox-folder-item primary urgent-folder-item" type="button" data-mailbox-section-toggle="urgent" data-mailbox-filter="urgent" aria-expanded="true">
+                    <span>需紧急处理</span>
+                    <strong data-mailbox-count="urgent">0</strong>
+                  </button>
+                  <div class="mailbox-submenu" data-mailbox-submenu="urgent">
+                    <button class="mailbox-alert-item" type="button" data-mailbox-filter="urgent">
+                      <span>查看高风险邮件</span>
+                      <strong data-mailbox-count="urgent">0</strong>
+                    </button>
+                  </div>
+                  <div class="mailbox-inline-list" data-mailbox-inline-list="urgent" hidden></div>
+                </div>
+                <div class="mailbox-menu-section open" data-mailbox-section="inbox">
+                  <button class="mailbox-folder-item primary" type="button" data-mailbox-section-toggle="inbox" data-mailbox-filter="inbox" aria-expanded="true">
+                    <span>收件箱</span>
+                    <strong data-mailbox-count="inbox">0</strong>
+                  </button>
+                  <div class="mailbox-submenu" data-mailbox-submenu="inbox">
+                    <button type="button" data-mailbox-filter="medium_risk">中风险 <strong data-mailbox-count="medium_risk">0</strong></button>
+                    <button type="button" data-mailbox-filter="low_risk">低风险 <strong data-mailbox-count="low_risk">0</strong></button>
+                  </div>
+                  <div class="mailbox-inline-list" data-mailbox-inline-list="inbox" hidden></div>
+                </div>
+                <div class="mailbox-menu-section" data-mailbox-section="favorite">
+                  <button class="mailbox-folder-item" type="button" data-mailbox-section-toggle="favorite" data-mailbox-filter="favorite" aria-expanded="false">
+                    <span>收藏</span>
+                    <strong data-mailbox-count="favorite">0</strong>
+                  </button>
+                  <div class="mailbox-submenu" data-mailbox-submenu="favorite" hidden>
+                    <button type="button" data-mailbox-filter="favorite">查看收藏 <strong data-mailbox-count="favorite">0</strong></button>
+                  </div>
+                  <div class="mailbox-inline-list" data-mailbox-inline-list="favorite" hidden></div>
+                </div>
+                <div class="mailbox-menu-section" data-mailbox-section="sent">
+                  <button class="mailbox-folder-item" type="button" data-mailbox-section-toggle="sent" data-mailbox-filter="sent" aria-expanded="false">
+                    <span>已发送</span>
+                    <strong data-mailbox-count="sent">0</strong>
+                  </button>
+                  <div class="mailbox-submenu" data-mailbox-submenu="sent" hidden>
+                    <button type="button" data-mailbox-filter="sent">查看已发送 <strong data-mailbox-count="sent">0</strong></button>
+                  </div>
+                  <div class="mailbox-inline-list" data-mailbox-inline-list="sent" hidden></div>
+                </div>
+                <div class="mailbox-menu-section" data-mailbox-section="archived">
+                  <button class="mailbox-folder-item" type="button" data-mailbox-section-toggle="archived" data-mailbox-filter="archived" aria-expanded="false">
+                    <span>已归档</span>
+                    <strong data-mailbox-count="archived">0</strong>
+                  </button>
+                  <div class="mailbox-submenu" data-mailbox-submenu="archived" hidden>
+                    <button type="button" data-mailbox-filter="archived">查看已归档 <strong data-mailbox-count="archived">0</strong></button>
+                  </div>
+                  <div class="mailbox-inline-list" data-mailbox-inline-list="archived" hidden></div>
+                </div>
+                <div class="mailbox-menu-section" data-mailbox-section="deleted">
+                  <button class="mailbox-folder-item" type="button" data-mailbox-section-toggle="deleted" data-mailbox-filter="deleted" aria-expanded="false">
+                    <span>已删除</span>
+                    <strong data-mailbox-count="deleted">0</strong>
+                  </button>
+                  <div class="mailbox-submenu" data-mailbox-submenu="deleted" hidden>
+                    <button type="button" data-mailbox-filter="deleted">查看已删除 <strong data-mailbox-count="deleted">0</strong></button>
+                  </div>
+                  <div class="mailbox-inline-list" data-mailbox-inline-list="deleted" hidden></div>
+                </div>
+                <div class="mailbox-menu-section" data-mailbox-section="spam">
+                  <button class="mailbox-folder-item" type="button" data-mailbox-section-toggle="spam" data-mailbox-filter="spam" aria-expanded="false">
+                    <span>垃圾邮件</span>
+                    <strong data-mailbox-count="spam">0</strong>
+                  </button>
+                  <div class="mailbox-submenu" data-mailbox-submenu="spam" hidden>
+                    <button type="button" data-mailbox-filter="spam">查看垃圾邮件 <strong data-mailbox-count="spam">0</strong></button>
+                  </div>
+                  <div class="mailbox-inline-list" data-mailbox-inline-list="spam" hidden></div>
+                </div>
+              </nav>
+            </section>
+            <section class="nav-panel mailbox-list-panel" aria-label="邮箱工作台邮件列表" hidden>
+              <div class="mail-list" data-mail-list></div>
+            </section>
+            <div class="mailbox-settings-dock">
+              <button class="settings-dock-button" type="button" data-open-settings aria-label="打开系统设置" title="系统设置">⚙</button>
+            </div>
+          </aside>
+
+          <main class="main">
+            <section class="workspace detail-workspace">
+              <article class="detail-card" data-mail-detail></article>
+            </section>
+          </main>
+        </div>
+      </div>
+
+      <aside class="right-panel settings-panel" data-settings-panel aria-label="设置" aria-hidden="true">
+        <div class="settings-panel-header">
+          <div>
+            <h2>设置</h2>
+          </div>
+          <button class="settings-close-button" type="button" data-close-settings aria-label="关闭设置">×</button>
+        </div>
+
+        <div class="settings-layout">
+          <nav class="settings-primary-nav" aria-label="设置一级菜单" data-settings-primary-nav></nav>
+          <main class="settings-content" aria-label="设置三级内容">
+            <section class="safety-card" data-settings-section="account-session">
+              <h2>账号与登录</h2>
+              <div data-account-session></div>
+            </section>
+
+            <section class="safety-card" data-settings-section="loop-control">
+              <h2>自动处理开关</h2>
+              <div data-loop-control></div>
+            </section>
+
+            <section class="safety-card" data-settings-section="mailbox-switcher">
+              <h2>邮箱与报告机器人</h2>
+              <div data-mailbox-switcher></div>
+            </section>
+
+            <section class="safety-card" data-settings-section="email-ai-admin-auth">
+              <h2>管理员权限</h2>
+              <div data-email-ai-admin-auth></div>
+              <div data-email-ai-status></div>
+            </section>
+
+            <section class="safety-card email-ai-admin-section" data-settings-section="email-ai-admin-control">
+              <h2 data-email-ai-admin-title>AI 管理配置</h2>
+              <div data-email-ai-settings-control></div>
+            </section>
+
+            <section class="safety-card" data-settings-section="review-export">
+              <h2>审核清单</h2>
+              <ul>
+                <li><span>记录</span>标记规则是否合理、是否需调整。</li>
+                <li><span>沉淀</span>备注会保存在本机浏览器。</li>
+              </ul>
+              <button class="secondary-button" type="button" data-export-reviews>导出审核清单</button>
+            </section>
+
+            <section class="safety-card" data-settings-section="report-view">
+              <h2>处理报告</h2>
+              <p class="muted">查看邮件处理结果、异常事项、待人工处理数量和数据来源汇总。</p>
+              <a class="secondary-button report-link-button" href="./boss.html">打开处理报告</a>
+            </section>
+
+            <section class="safety-card settings-placeholder" data-settings-empty>
+              <h2>邮箱设置</h2>
+              <p class="muted">请选择左侧“邮箱”下的具体设置项。</p>
+            </section>
+          </main>
+        </div>
+      </aside>
+    </div>
+    <div class="settings-backdrop" data-settings-backdrop></div>
+
+    <div class="email-rule-control-backdrop" data-email-rule-control-backdrop></div>
+    <section class="email-rule-control-panel" data-email-rule-control-panel aria-label="邮件规则配置" aria-hidden="true">
+      <div class="email-rule-control-header">
+        <div>
+          <span>当前邮件规则配置</span>
+          <h2 data-email-rule-control-title>业务规则配置</h2>
+          <p data-email-rule-control-context></p>
+        </div>
+        <div class="email-rule-control-actions">
+          <button class="secondary-button compact-button" type="button" data-return-system-rules hidden>返回系统规则</button>
+          <button class="settings-close-button" type="button" data-close-email-rule-control aria-label="关闭规则配置">×</button>
+        </div>
+      </div>
+      <div class="email-rule-control-body" data-email-rule-control-root></div>
+    </section>
+
+    <script type="module" src="./src/app.js?v=system-rules-toggle-return"></script>
+  </body>
+</html>

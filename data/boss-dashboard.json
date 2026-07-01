@@ -1,0 +1,383 @@
+{
+  "apiVersion": "boss-dashboard.v1",
+  "endpoint": "/data/boss-dashboard.json",
+  "generatedAt": "2026-06-15T02:39:19.275Z",
+  "data": {
+    "overview": {
+      "syncedDataSources": 0,
+      "targetDataSources": 6,
+      "totalMailCount": 0,
+      "pendingItems": 0,
+      "highPriorityExceptions": 0,
+      "spamMailCount": 0,
+      "whiteQueueCount": 0,
+      "agentModelLabel": "本地规则智能体",
+      "agentSourceStatus": "本地配置 / API 待接入",
+      "writeEnabled": false,
+      "realArchiveEnabled": false,
+      "writeAllowlistCount": 0,
+      "hardDeleteEnabled": false,
+      "draftCount": 0,
+      "simulationQueueCount": 0,
+      "realSendEnabled": false,
+      "dataTrustText": "API 待接入",
+      "sourceStatus": "API 待接入"
+    },
+    "processingAnalysis": {
+      "riskDistribution": {
+        "low": 0,
+        "medium": 0,
+        "high": 0,
+        "spam": 0
+      },
+      "actionDistribution": {
+        "autoReply": 0,
+        "draftOnly": 0,
+        "blocked": 0,
+        "ignored": 0
+      },
+      "workflowDistribution": {
+        "draftSaved": 0,
+        "waitingReview": 0,
+        "approved": 0,
+        "queued": 0,
+        "sendGuardBlocked": 0,
+        "ignored": 0,
+        "realSendAllowed": 0
+      },
+      "sourceRows": [
+        {
+          "name": "邮件读取与分类",
+          "metric": "0 封",
+          "detail": "来自飞书邮箱工作台分类结果，按低/中/高/垃圾四类汇总。",
+          "sourceStatus": "API 待接入"
+        },
+        {
+          "name": "候选回复与草稿",
+          "metric": "0 条",
+          "detail": "可入队 0，待人工审核 0。",
+          "sourceStatus": "API 待接入"
+        },
+        {
+          "name": "真实写操作",
+          "metric": "暂停",
+          "detail": "发送 关，归档 关，原始来信人 关，特殊名单 0。",
+          "sourceStatus": "API 待接入"
+        },
+        {
+          "name": "风险拦截",
+          "metric": "0 封",
+          "detail": "高风险不自动发送，垃圾邮件不生成客服回复。",
+          "sourceStatus": "API 待接入"
+        }
+      ],
+      "exceptionItems": [],
+      "boundaryNotes": [
+        "退款/赔偿类当前只处理邮件回复与审批记录，不触发订单、支付或赔偿接口。",
+        "高风险邮件必须人工接触内容并审批后才能发送人工确认回复。",
+        "垃圾邮件按归档/移箱设计，不做不可恢复硬删除。",
+        "所有老板看板数据块必须保留来源状态，未读取真实 API 时不能标成真实接入。"
+      ]
+    },
+    "processingReport": {
+      "resultSummary": {
+        "totalMailCount": 0,
+        "handledCount": 0,
+        "waitingReviewCount": 0,
+        "highRiskCount": 0,
+        "spamCount": 0,
+        "bossConclusion": "当前没有读取到邮件数据，请先确认飞书 API 状态。",
+        "sourceStatus": "API 待接入"
+      },
+      "resultMetrics": [
+        {
+          "key": "mail_total",
+          "label": "今日邮件总量",
+          "value": 0,
+          "detail": "已进入工作台并完成分类。",
+          "sourceStatus": "API 待接入"
+        },
+        {
+          "key": "handled_count",
+          "label": "已分流处理",
+          "value": 0,
+          "detail": "低风险候选回复 + 垃圾/无效分流。",
+          "sourceStatus": "API 待接入"
+        },
+        {
+          "key": "waiting_review",
+          "label": "待人工处理",
+          "value": 0,
+          "detail": "需要客服或负责人确认。",
+          "sourceStatus": "API 待接入"
+        },
+        {
+          "key": "high_exceptions",
+          "label": "高风险异常",
+          "value": 0,
+          "detail": "退款、投诉、改价、发货承诺等。",
+          "sourceStatus": "API 待接入"
+        },
+        {
+          "key": "spam_count",
+          "label": "无效/垃圾",
+          "value": 0,
+          "detail": "不回复，只归档或移箱。",
+          "sourceStatus": "API 待接入"
+        }
+      ],
+      "executiveItems": [],
+      "headlineMetrics": [
+        {
+          "key": "mail_total",
+          "label": "今日邮件处理量",
+          "value": 0,
+          "detail": "进入工作台并完成分类的邮件数量。",
+          "sourceStatus": "API 待接入"
+        },
+        {
+          "key": "waiting_review",
+          "label": "待人工审核",
+          "value": 0,
+          "detail": "中高风险或需人工确认后才能发送的草稿。",
+          "sourceStatus": "API 待接入"
+        },
+        {
+          "key": "high_exceptions",
+          "label": "高风险异常",
+          "value": 0,
+          "detail": "退款、投诉、差评、改价、发货承诺等必须人工处理。",
+          "sourceStatus": "API 待接入"
+        },
+        {
+          "key": "spam_count",
+          "label": "垃圾邮件",
+          "value": 0,
+          "detail": "白色队列，只归档/移箱，不生成客服回复。",
+          "sourceStatus": "API 待接入"
+        },
+        {
+          "key": "draft_count",
+          "label": "草稿生成数",
+          "value": 0,
+          "detail": "已生成并可供客服选择、编辑或审核的话术草稿。",
+          "sourceStatus": "API 待接入"
+        },
+        {
+          "key": "send_control",
+          "label": "可发送/拦截",
+          "value": "0/0",
+          "detail": "真实发送 关，归档 关，原始来信人 关，特殊名单 0。",
+          "sourceStatus": "API 待接入"
+        }
+      ],
+      "analysisRows": [
+        {
+          "name": "邮件读取与分类",
+          "metric": "0 封",
+          "detail": "来自飞书邮箱工作台分类结果，按低/中/高/垃圾四类汇总。",
+          "sourceStatus": "API 待接入"
+        },
+        {
+          "name": "候选回复与草稿",
+          "metric": "0 条",
+          "detail": "可入队 0，待人工审核 0。",
+          "sourceStatus": "API 待接入"
+        },
+        {
+          "name": "真实写操作",
+          "metric": "暂停",
+          "detail": "发送 关，归档 关，原始来信人 关，特殊名单 0。",
+          "sourceStatus": "API 待接入"
+        },
+        {
+          "name": "风险拦截",
+          "metric": "0 封",
+          "detail": "高风险不自动发送，垃圾邮件不生成客服回复。",
+          "sourceStatus": "API 待接入"
+        }
+      ],
+      "funnelRows": [
+        {
+          "label": "草稿已生成",
+          "value": 0,
+          "sourceStatus": "API 待接入"
+        },
+        {
+          "label": "待审核",
+          "value": 0,
+          "sourceStatus": "API 待接入"
+        },
+        {
+          "label": "已审核",
+          "value": 0,
+          "sourceStatus": "API 待接入"
+        },
+        {
+          "label": "可进入发送队列",
+          "value": 0,
+          "sourceStatus": "API 待接入"
+        },
+        {
+          "label": "发送前拦截",
+          "value": 0,
+          "sourceStatus": "API 待接入"
+        }
+      ],
+      "exceptionItems": [],
+      "sourceTrustRows": [
+        {
+          "name": "邮件读取与分类",
+          "sourceStatus": "API 待接入",
+          "detail": "来自飞书邮箱工作台分类结果，按低/中/高/垃圾四类汇总。"
+        },
+        {
+          "name": "候选回复与草稿",
+          "sourceStatus": "API 待接入",
+          "detail": "可入队 0，待人工审核 0。"
+        },
+        {
+          "name": "真实写操作",
+          "sourceStatus": "API 待接入",
+          "detail": "发送 关，归档 关，原始来信人 关，特殊名单 0。"
+        },
+        {
+          "name": "风险拦截",
+          "sourceStatus": "API 待接入",
+          "detail": "高风险不自动发送，垃圾邮件不生成客服回复。"
+        }
+      ]
+    },
+    "dataSources": [
+      {
+        "name": "飞书邮箱",
+        "currentMethod": "API 待接入",
+        "status": "待启动本地 API 代理",
+        "owner": "利华实现，阿雨验收",
+        "firstPhase": "是",
+        "sourceStatus": "API 待接入",
+        "synced": false
+      },
+      {
+        "name": "ERP / 订单",
+        "currentMethod": "CSV / API 待确认",
+        "status": "暂未接入",
+        "owner": "海龙提供接口信息",
+        "firstPhase": "是",
+        "sourceStatus": "API 待接入",
+        "synced": false
+      },
+      {
+        "name": "飞书多维表格",
+        "currentMethod": "API / 手工",
+        "status": "待确认",
+        "owner": "海龙",
+        "firstPhase": "可选",
+        "sourceStatus": "API 待接入",
+        "synced": false
+      },
+      {
+        "name": "抖店",
+        "currentMethod": "API 待申请",
+        "status": "暂缓",
+        "owner": "海龙",
+        "firstPhase": "否",
+        "sourceStatus": "API 待接入",
+        "synced": false
+      },
+      {
+        "name": "TikTok / TK",
+        "currentMethod": "API 待申请",
+        "status": "暂缓",
+        "owner": "海龙",
+        "firstPhase": "否",
+        "sourceStatus": "API 待接入",
+        "synced": false
+      },
+      {
+        "name": "WhatsApp / Facebook",
+        "currentMethod": "官方权限高",
+        "status": "后续",
+        "owner": "海龙",
+        "firstPhase": "否",
+        "sourceStatus": "API 待接入",
+        "synced": false
+      }
+    ],
+    "agentRuntime": {
+      "modelId": "local-rule-agent",
+      "modelLabel": "本地规则智能体",
+      "replyStyle": "standard",
+      "replyStyleLabel": "标准客服",
+      "knowledgeBaseIds": [
+        "productKnowledge",
+        "aftersaleRules",
+        "logisticsRules",
+        "creatorCollaboration",
+        "forbiddenExpressions"
+      ],
+      "knowledgeBaseLabels": [
+        "产品知识",
+        "售后规则",
+        "物流规则",
+        "达人合作",
+        "禁用表达"
+      ],
+      "sourceStatus": "本地配置 / API 待接入",
+      "realModelConnected": false,
+      "realSendEnabled": false
+    },
+    "mailPriorityQueue": [],
+    "orderExamples": [],
+    "acceptance": {
+      "canRunPage": true,
+      "demoBoundaryClear": true,
+      "disabledHighRiskActions": [
+        "退款自动处理",
+        "改价自动处理",
+        "发货时间承诺",
+        "赔偿承诺",
+        "高风险自动回复"
+      ],
+      "reportPositioning": [
+        "只汇报工作台处理量、异常、草稿漏斗和来源可信度。",
+        "不在老板看板处理邮件，不展示密钥，不绕过工作台审批。",
+        "真实接入、CSV 和 API 待接入必须清楚标记。"
+      ]
+    }
+  },
+  "boundary": {
+    "realFeishuApiConnected": false,
+    "realOrderApiConnected": false,
+    "realMailSendEnabled": false,
+    "realMailArchiveEnabled": false,
+    "hardDeleteEnabled": false,
+    "writeAllowlistCount": 0,
+    "sourceStatuses": [
+      {
+        "name": "飞书邮箱",
+        "sourceStatus": "API 待接入"
+      },
+      {
+        "name": "ERP / 订单",
+        "sourceStatus": "API 待接入"
+      },
+      {
+        "name": "飞书多维表格",
+        "sourceStatus": "API 待接入"
+      },
+      {
+        "name": "抖店",
+        "sourceStatus": "API 待接入"
+      },
+      {
+        "name": "TikTok / TK",
+        "sourceStatus": "API 待接入"
+      },
+      {
+        "name": "WhatsApp / Facebook",
+        "sourceStatus": "API 待接入"
+      }
+    ]
+  }
+}

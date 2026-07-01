@@ -1,0 +1,12 @@
+.env
+.env.*
+!.env.example
+!.env.local.example
+
+node_modules/
+.DS_Store
+
+.runtime/
+tmp/
+.runtime/*.log
+.runtime/*.pid

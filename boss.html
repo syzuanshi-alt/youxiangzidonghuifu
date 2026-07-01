@@ -1,0 +1,86 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>邮件处理报告</title>
+    <link rel="stylesheet" href="./src/styles.css" />
+  </head>
+  <body>
+    <main class="boss-shell">
+      <header class="boss-header">
+        <div>
+          <p class="eyebrow">飞书邮箱工作台</p>
+          <h1>邮件处理报告</h1>
+          <p>汇总今天处理结果、异常数量、待人工事项和数据来源。</p>
+        </div>
+        <nav class="boss-nav" aria-label="报告导航">
+          <a href="./index.html">飞书邮箱工作台</a>
+          <span>结果汇报，不展示执行细节</span>
+        </nav>
+      </header>
+
+      <section class="boss-metrics" data-boss-overview></section>
+
+      <section class="boss-grid">
+        <article class="boss-card boss-card-wide">
+          <div class="section-heading">
+            <div>
+              <p class="eyebrow">Source Status</p>
+              <h2>数据来源</h2>
+            </div>
+            <span class="source-badge">只保留关键来源</span>
+          </div>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>数据</th>
+                  <th>结果</th>
+                  <th>说明</th>
+                  <th>来源状态</th>
+                </tr>
+              </thead>
+              <tbody data-source-table></tbody>
+            </table>
+          </div>
+        </article>
+
+        <article class="boss-card">
+          <div class="section-heading">
+            <div>
+              <p class="eyebrow">Exceptions</p>
+              <h2>需要关注</h2>
+            </div>
+            <span class="source-badge">最多 5 条</span>
+          </div>
+          <div class="stack-list" data-mail-priority></div>
+        </article>
+
+        <article class="boss-card">
+          <div class="section-heading">
+            <div>
+              <p class="eyebrow">Actions</p>
+              <h2>今日结论</h2>
+            </div>
+            <span class="source-badge">结果输出</span>
+          </div>
+          <div class="stack-list" data-order-examples></div>
+        </article>
+
+        <article class="boss-card boss-card-wide">
+          <div class="section-heading">
+            <div>
+              <p class="eyebrow">Boundaries</p>
+              <h2>不可越过的边界</h2>
+            </div>
+            <span class="source-badge source-warning">处理报告只读</span>
+          </div>
+          <div class="acceptance-grid" data-acceptance></div>
+        </article>
+      </section>
+    </main>
+
+    <script type="module" src="./src/bossApp.js"></script>
+  </body>
+</html>
