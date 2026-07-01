@@ -40,6 +40,8 @@ function plist() {
   <dict>
     <key>PORT</key>
     <string>5175</string>
+    <key>HOST</key>
+    <string>127.0.0.1</string>
   </dict>
   <key>RunAtLoad</key>
   <true/>

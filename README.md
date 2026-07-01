@@ -297,6 +297,62 @@ node scripts/feishuReadSmokeTest.mjs
 
 这个脚本只输出是否读取成功、读取到几封邮件和前 3 封邮件的基础字段，不打印 App Secret 或 access token。生产邮箱会显示真实邮件标题和发件人，运行后不要把输出截图外传。
 
+## Railway 云端部署
+
+第一版云端建议使用 Railway 单个 Node Web Service：服务端会同时托管工作台静态页面和 API。Railway 需要公网可访问监听地址，服务启动时默认监听 `0.0.0.0`；本地如需只监听本机，可设置 `HOST=127.0.0.1`。
+
+Railway 服务配置：
+
+```text
+Repository: syzuanshi-alt/youxiangzidonghuifu
+Branch: main
+Start Command: npm start
+Healthcheck Path: /healthz
+Volume Mount Path: /data
+```
+
+Railway 环境变量最小配置：
+
+```bash
+WORKBENCH_DATA_DIR=/data
+FEISHU_APP_ID=你的 App ID
+FEISHU_APP_SECRET=你的 App Secret
+FEISHU_USER_MAILBOX_ID=目标邮箱 user_mailbox_id
+EMAIL_AI_ADMIN_TOKEN=随机长 token
+EMAIL_AI_ADMIN_PASSWORD=后台登录密码
+FEISHU_MAIL_FOLDER_ID=INBOX
+FEISHU_OAUTH_REDIRECT_URI=https://<Railway域名>/oauth/callback
+FEISHU_WRITE_ENABLED=true
+FEISHU_SEND_ENABLED=true
+FEISHU_HIGH_RISK_SEND_ENABLED=false
+FEISHU_AUTO_PROCESS_ENABLED=true
+FEISHU_AUTO_SEND_LOW_RISK_ENABLED=true
+FEISHU_AUTO_ARCHIVE_SPAM_ENABLED=false
+FEISHU_AUTO_PROCESS_SCHEDULE_ENABLED=false
+FEISHU_CUSTOMER_REPLY_ORIGINAL_SENDER_ENABLED=true
+FEISHU_DAILY_SEND_LIMIT=5
+FEISHU_DAILY_ARCHIVE_LIMIT=0
+```
+
+上线顺序：
+
+1. 先保持 `FEISHU_AUTO_PROCESS_SCHEDULE_ENABLED=false` 部署，避免未验证前后台自动处理。
+2. 在飞书开放平台把回调地址配置为 `https://<Railway域名>/oauth/callback`。
+3. 打开 `https://<Railway域名>/oauth/start?state=railway-prod` 完成飞书 OAuth。
+4. 检查 `https://<Railway域名>/healthz` 返回 200，再检查 `/api/feishu/status` 和邮件读取接口。
+5. 用真实低风险测试邮件验证发送、审计日志和重启后处理状态保留。
+6. 验证通过后再把 `FEISHU_AUTO_PROCESS_SCHEDULE_ENABLED=true`，进入半自动发送。
+
+默认 `/oauth/start` 只申请 `offline_access`、邮件读取正文 / 地址 / 主题和 `mail:user_mailbox.message:send`。归档 / 移箱、飞书机器人通知等第二阶段能力需要先在飞书开放平台追加权限，再用 `FEISHU_OAUTH_SCOPE` 显式覆盖授权范围。
+
+回滚或紧急暂停时，立即关闭：
+
+```bash
+FEISHU_AUTO_PROCESS_SCHEDULE_ENABLED=false
+FEISHU_AUTO_SEND_LOW_RISK_ENABLED=false
+FEISHU_SEND_ENABLED=false
+```
+
 ## API 接入准备
 
 工作台右侧有“API 接入准备”卡片，会显示本地代理、飞书只读配置和邮件来源状态。

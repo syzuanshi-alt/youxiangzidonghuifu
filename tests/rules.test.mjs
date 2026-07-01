@@ -1,8 +1,8 @@
 import assert from 'node:assert/strict';
 import { once } from 'node:events';
-import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
-import { join } from 'node:path';
+import { join, resolve } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import {
   classifyMail,
@@ -183,6 +183,7 @@ import {
 import {
   createFeishuApiServer,
   isCliEntryPoint,
+  resolveWorkbenchDataRoot,
 } from '../server/feishuApiServer.mjs';
 import {
   mergeLocalEnv,
@@ -2388,10 +2389,23 @@ const serverEntryPath = fileURLToPath(new URL('../server/feishuApiServer.mjs', i
 assert.equal(isCliEntryPoint(pathToFileURL(serverEntryPath).href, serverEntryPath), true);
 assert.equal(isCliEntryPoint(pathToFileURL(serverEntryPath).href, '/tmp/other-entry.mjs'), false);
 const serverSource = readFileSync(new URL('../server/feishuApiServer.mjs', import.meta.url), 'utf8');
-assert.match(serverSource, /mail:user_mailbox\.message:modify/);
-assert.match(serverSource, /contact:user\.employee_id:readonly/);
-assert.match(serverSource, /mail:user_mailbox\.folder:read/);
-assert.match(serverSource, /mail:user_mailbox\.folder:write/);
+const apiLaunchAgentInstallerSource = readFileSync(new URL('../scripts/installFeishuApiLaunchAgent.mjs', import.meta.url), 'utf8');
+const packageJson = JSON.parse(readFileSync(new URL('../package.json', import.meta.url), 'utf8'));
+assert.equal(packageJson.scripts.start, 'node server/feishuApiServer.mjs');
+assert.match(serverSource, /process\.env\.HOST\s*\|\|\s*'0\.0\.0\.0'/);
+assert.match(apiLaunchAgentInstallerSource, /<key>HOST<\/key>\s*<string>127\.0\.0\.1<\/string>/);
+assert.equal(resolveWorkbenchDataRoot({
+  rootDir: '/app/workbench',
+  env: {},
+}), resolve('/app/workbench'));
+assert.equal(resolveWorkbenchDataRoot({
+  rootDir: '/app/workbench',
+  env: { RAILWAY_VOLUME_MOUNT_PATH: '/railway-volume' },
+}), resolve('/railway-volume'));
+assert.equal(resolveWorkbenchDataRoot({
+  rootDir: '/app/workbench',
+  env: { WORKBENCH_DATA_DIR: '/workbench-data', RAILWAY_VOLUME_MOUNT_PATH: '/railway-volume' },
+}), resolve('/workbench-data'));
 
 async function withTestServer(server, fn) {
   server.listen(0, '127.0.0.1');
@@ -2458,6 +2472,47 @@ await withTestServer(createFeishuApiServer({
   const pageResponse = await fetch(`${baseUrl}/index.html`);
   assert.equal(pageResponse.status, 200);
 });
+
+await withTestServer(createFeishuApiServer({
+  rootDir: new URL('../', import.meta.url),
+  env: {
+    FEISHU_APP_ID: 'cli_test_app_id',
+  },
+  fetchImpl: async () => {
+    throw new Error('健康检查不应该请求飞书 API。');
+  },
+}), async (baseUrl) => {
+  const healthResponse = await fetch(`${baseUrl}/healthz`);
+  const healthPayload = await healthResponse.json();
+  assert.equal(healthResponse.status, 200);
+  assert.equal(healthPayload.ok, true);
+  assert.equal(healthPayload.service, 'as-feishu-mail-panel');
+  assert.equal(healthPayload.status, 'ok');
+});
+
+const railwayDataRoot = mkdtempSync(join(tmpdir(), 'railway-data-root-'));
+try {
+  await withTestServer(createFeishuApiServer({
+    rootDir: new URL('../', import.meta.url),
+    env: {
+      WORKBENCH_DATA_DIR: railwayDataRoot,
+      FEISHU_APP_ID: 'cli_test_app_id',
+    },
+    fetchImpl: async () => {
+      throw new Error('AI 配置初始化不应该请求飞书 API。');
+    },
+  }), async (baseUrl) => {
+    const response = await fetch(`${baseUrl}/api/email-ai/status`);
+    assert.equal(response.status, 200);
+  });
+
+  const seededStorePath = join(railwayDataRoot, 'data/email-ai-control-store.json');
+  const seededStore = JSON.parse(readFileSync(seededStorePath, 'utf8'));
+  assert.equal(existsSync(join(railwayDataRoot, '.runtime')), true);
+  assert.ok(seededStore.riskRules.some((rule) => rule.id === 'risk-low-general-question'));
+} finally {
+  rmSync(railwayDataRoot, { recursive: true, force: true });
+}
 
 const blockedAuditEvents = [];
 await withTestServer(createFeishuApiServer({
@@ -3780,8 +3835,43 @@ assert.match(workbenchSource, /setInterval\(.*loadFeishuApiMessages/s);
 const envLocalExampleSource = readFileSync(new URL('../.env.local.example', import.meta.url), 'utf8');
 const readmeSource = readFileSync(new URL('../README.md', import.meta.url), 'utf8');
 assert.match(envLocalExampleSource, /EMAIL_AI_ADMIN_TOKEN=/);
+assert.match(envLocalExampleSource, /WORKBENCH_DATA_DIR=/);
+assert.match(envLocalExampleSource, /FEISHU_AUTO_PROCESS_SCHEDULE_ENABLED=false/);
 assert.match(readmeSource, /EMAIL_AI_ADMIN_TOKEN/);
 assert.match(readmeSource, /管理员 Token/);
+assert.match(readmeSource, /Railway 云端部署/);
+assert.match(readmeSource, /\/healthz/);
+assert.match(readmeSource, /WORKBENCH_DATA_DIR=\/data/);
+
+await withTestServer(createFeishuApiServer({
+  rootDir: new URL('../', import.meta.url),
+  env: {
+    FEISHU_APP_ID: 'railway_min_scope_app_id',
+    FEISHU_APP_SECRET: 'secret_only_on_server',
+    FEISHU_USER_MAILBOX_ID: 'service@example.test',
+  },
+}), async (baseUrl) => {
+  const response = await fetch(`${baseUrl}/oauth/start?state=railway-prod`, {
+    redirect: 'manual',
+  });
+  assert.equal(response.status, 302);
+  const authorizeUrl = new URL(response.headers.get('location'));
+  const scopes = authorizeUrl.searchParams.get('scope').split(/\s+/);
+  assert.equal(authorizeUrl.searchParams.get('app_id'), 'railway_min_scope_app_id');
+  assert.equal(authorizeUrl.searchParams.get('state'), 'railway-prod');
+  assert.equal(scopes.includes('offline_access'), true);
+  assert.equal(scopes.includes('mail:user_mailbox.message:readonly'), true);
+  assert.equal(scopes.includes('mail:user_mailbox.message.address:read'), true);
+  assert.equal(scopes.includes('mail:user_mailbox.message.subject:read'), true);
+  assert.equal(scopes.includes('mail:user_mailbox.message.body:read'), true);
+  assert.equal(scopes.includes('mail:user_mailbox.message:send'), true);
+  assert.equal(scopes.includes('mail:user_mailbox.message:modify'), false);
+  assert.equal(scopes.includes('mail:user_mailbox.folder:read'), false);
+  assert.equal(scopes.includes('mail:user_mailbox.folder:write'), false);
+  assert.equal(scopes.includes('im:message:send_as_bot'), false);
+  assert.equal(scopes.includes('contact:user.employee_id:readonly'), false);
+  assert.equal(new Set(scopes).size, scopes.length);
+});
 
 await withTestServer(createFeishuApiServer({
   rootDir: new URL('../', import.meta.url),
@@ -3863,6 +3953,45 @@ try {
   });
 } finally {
   rmSync(oauthRootDir, { recursive: true, force: true });
+}
+
+const railwayOauthDataRoot = mkdtempSync(join(tmpdir(), 'railway-oauth-data-'));
+try {
+  const oauthEnv = {
+    WORKBENCH_DATA_DIR: railwayOauthDataRoot,
+    FEISHU_APP_ID: 'cli_test_app_id',
+    FEISHU_APP_SECRET: 'secret_only_on_server',
+    FEISHU_USER_MAILBOX_ID: 'service@example.test',
+  };
+  await withTestServer(createFeishuApiServer({
+    rootDir: new URL('../', import.meta.url),
+    env: oauthEnv,
+    fetchImpl: async (url, options = {}) => {
+      assert.match(url, /\/authen\/v2\/oauth\/token$/);
+      assert.equal(JSON.parse(options.body).code, 'railway-auth-code-test');
+      return {
+        json: async () => ({
+          code: 0,
+          msg: 'success',
+          data: {
+            access_token: 'railway-user-token-should-not-leak',
+            refresh_token: 'railway-refresh-token-should-not-leak',
+            expires_in: 7200,
+            refresh_expires_in: 2592000,
+          },
+        }),
+      };
+    },
+  }), async (baseUrl) => {
+    const callbackResponse = await fetch(`${baseUrl}/oauth/callback?code=railway-auth-code-test&state=railway-prod`);
+    assert.equal(callbackResponse.status, 200);
+  });
+
+  const envFileText = readFileSync(join(railwayOauthDataRoot, '.env.local'), 'utf8');
+  assert.match(envFileText, /FEISHU_USER_ACCESS_TOKEN=railway-user-token-should-not-leak/);
+  assert.match(envFileText, /FEISHU_USER_REFRESH_TOKEN=railway-refresh-token-should-not-leak/);
+} finally {
+  rmSync(railwayOauthDataRoot, { recursive: true, force: true });
 }
 
 const workbenchHtml = readFileSync('index.html', 'utf8');

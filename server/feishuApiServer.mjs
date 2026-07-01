@@ -1,5 +1,5 @@
 import { createReadStream } from 'node:fs';
-import { appendFile, mkdir, readFile, stat, writeFile } from 'node:fs/promises';
+import { appendFile, copyFile, mkdir, readFile, stat, writeFile } from 'node:fs/promises';
 import { createServer } from 'node:http';
 import { dirname, extname, join, normalize, resolve, sep } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -68,17 +68,11 @@ const USER_TOKEN_REFRESH_SKEW_MS = 5 * 60 * 1000;
 const REFRESH_TOKEN_OAUTH_SCOPE = 'offline_access';
 const DEFAULT_OAUTH_SCOPES = [
   REFRESH_TOKEN_OAUTH_SCOPE,
-  'contact:user.id:readonly',
-  'contact:user.employee_id:readonly',
-  'im:message:send_as_bot',
   'mail:user_mailbox.message:readonly',
   'mail:user_mailbox.message.address:read',
   'mail:user_mailbox.message.subject:read',
   'mail:user_mailbox.message.body:read',
   'mail:user_mailbox.message:send',
-  'mail:user_mailbox.message:modify',
-  'mail:user_mailbox.folder:read',
-  'mail:user_mailbox.folder:write',
 ].join(' ');
 
 const CONTENT_TYPES = {
@@ -270,6 +264,46 @@ async function updateLocalEnvValues(envPath, updates) {
     content,
   );
   await writeFile(envPath, nextContent.endsWith('\n') ? nextContent : `${nextContent}\n`, 'utf8');
+}
+
+async function pathExists(pathname) {
+  try {
+    await stat(pathname);
+    return true;
+  } catch (error) {
+    if (error.code === 'ENOENT') return false;
+    throw error;
+  }
+}
+
+export function resolveWorkbenchDataRoot({
+  rootDir = process.cwd(),
+  env = process.env,
+} = {}) {
+  const resolvedAppRoot = rootDir instanceof URL ? fileURLToPath(rootDir) : rootDir;
+  const configuredDataRoot = String(
+    env.WORKBENCH_DATA_DIR
+      || env.RAILWAY_VOLUME_MOUNT_PATH
+      || '',
+  ).trim();
+
+  return configuredDataRoot ? resolve(configuredDataRoot) : resolve(resolvedAppRoot);
+}
+
+async function initializeWorkbenchDataRoot({
+  appRoot,
+  dataRoot,
+} = {}) {
+  await mkdir(dataRoot, { recursive: true });
+  await mkdir(join(dataRoot, '.runtime'), { recursive: true });
+
+  const sourceStorePath = join(appRoot, 'data/email-ai-control-store.json');
+  const targetStorePath = join(dataRoot, 'data/email-ai-control-store.json');
+  if (await pathExists(targetStorePath)) return;
+  if (!(await pathExists(sourceStorePath))) return;
+
+  await mkdir(dirname(targetStorePath), { recursive: true });
+  await copyFile(sourceStorePath, targetStorePath);
 }
 
 function extractUserAccessToken(payload) {
@@ -1697,8 +1731,27 @@ export function createFeishuApiServer({
   auditWriter = defaultAuditWriter,
 } = {}) {
   const resolvedRoot = rootDir instanceof URL ? fileURLToPath(rootDir) : rootDir;
-  const emailAIRepository = createEmailAIStoreRepository({
+  const resolvedDataRoot = resolveWorkbenchDataRoot({
     rootDir: resolvedRoot,
+    env,
+  });
+  const runtimeEnvInfo = {
+    ...envInfo,
+    path: envInfo.path || join(resolvedDataRoot, '.env.local'),
+  };
+  let dataRootReady = null;
+  function ensureDataRootReady() {
+    if (!dataRootReady) {
+      dataRootReady = initializeWorkbenchDataRoot({
+        appRoot: resolvedRoot,
+        dataRoot: resolvedDataRoot,
+      });
+      dataRootReady.catch(() => {});
+    }
+    return dataRootReady;
+  }
+  const emailAIRepository = createEmailAIStoreRepository({
+    rootDir: resolvedDataRoot,
     env,
   });
   const mailReadCache = new Map();
@@ -1747,8 +1800,8 @@ export function createFeishuApiServer({
   let autoProcessPromise = null;
 
   async function attachProcessingStatusToMailPayload(payload = {}) {
-    const statusMap = await loadMailProcessingStatusMap(resolvedRoot);
-    const riskOverrides = await loadRiskOverrideMap(resolvedRoot);
+    const statusMap = await loadMailProcessingStatusMap(resolvedDataRoot);
+    const riskOverrides = await loadRiskOverrideMap(resolvedDataRoot);
     const mails = Array.isArray(payload.mails)
       ? payload.mails.map((mail) => {
         const directProcessingStatus = statusMap.get(String(mail.id))
@@ -1848,7 +1901,7 @@ export function createFeishuApiServer({
 
     autoProcessPromise = (async () => {
       try {
-        const processedMailKeys = await loadProcessedMailKeys(resolvedRoot);
+        const processedMailKeys = await loadProcessedMailKeys(resolvedDataRoot);
         autoProcessStatus.lastKnownProcessedCount = processedMailKeys.size;
         const result = await executeClosedLoopProcess({
           body: {
@@ -1863,10 +1916,10 @@ export function createFeishuApiServer({
             reason,
           },
           env,
-          envInfo,
+          envInfo: runtimeEnvInfo,
           fetchImpl,
           auditWriter,
-          rootDir: resolvedRoot,
+          rootDir: resolvedDataRoot,
           emailAIRepository,
         });
 
@@ -1898,6 +1951,21 @@ export function createFeishuApiServer({
         sendOptions(response);
         return;
       }
+
+      if (requestUrl.pathname === '/healthz') {
+        if (request.method !== 'GET' && request.method !== 'HEAD') {
+          sendMethodNotAllowed(response);
+          return;
+        }
+        sendJson(response, 200, {
+          ok: true,
+          status: 'ok',
+          service: 'as-feishu-mail-panel',
+        });
+        return;
+      }
+
+      await ensureDataRootReady();
 
       if (requestUrl.pathname === '/oauth/start') {
         if (request.method !== 'GET') {
@@ -1953,7 +2021,7 @@ export function createFeishuApiServer({
           expiresIn,
           refreshExpiresIn,
         } = extractUserAccessToken(tokenPayload);
-        const envPath = envInfo.path || join(resolvedRoot, '.env.local');
+        const envPath = runtimeEnvInfo.path || join(resolvedDataRoot, '.env.local');
         const updates = buildUserTokenEnvUpdates({
           token,
           refreshToken,
@@ -2000,9 +2068,9 @@ export function createFeishuApiServer({
           requestUrl,
           body,
           repository: emailAIRepository,
-          rootDir: resolvedRoot,
+          rootDir: resolvedDataRoot,
           env,
-          envInfo,
+          envInfo: runtimeEnvInfo,
           fetchImpl,
         }).catch(normalizeEmailAIHttpError);
         sendJson(response, result.statusCode, result.payload);
@@ -2019,7 +2087,7 @@ export function createFeishuApiServer({
           request,
           body,
           repository: emailAIRepository,
-          rootDir: resolvedRoot,
+          rootDir: resolvedDataRoot,
           env,
           fetchImpl,
         }).catch(normalizeEmailAIHttpError);
@@ -2035,7 +2103,7 @@ export function createFeishuApiServer({
         const result = await handleEmailAIStatusRequest({
           request,
           repository: emailAIRepository,
-          rootDir: resolvedRoot,
+          rootDir: resolvedDataRoot,
           env,
         }).catch(normalizeEmailAIHttpError);
         sendJson(response, result.statusCode, result.payload);
@@ -2062,7 +2130,7 @@ export function createFeishuApiServer({
           mailboxAddress: env.FEISHU_USER_MAILBOX_ID || '',
           botReportEmail: env.FEISHU_BOT_REPORT_EMAIL || '',
           appIdMasked: maskConfigValue(env.FEISHU_APP_ID),
-          localEnvLoaded: Boolean(envInfo.loaded),
+          localEnvLoaded: Boolean(runtimeEnvInfo.loaded),
         });
         return;
       }
@@ -2144,10 +2212,10 @@ export function createFeishuApiServer({
           action: 'send',
           body,
           env,
-          envInfo,
+          envInfo: runtimeEnvInfo,
           fetchImpl,
           auditWriter,
-          rootDir: resolvedRoot,
+          rootDir: resolvedDataRoot,
         });
         sendJson(response, result.statusCode, result.payload);
         return;
@@ -2163,10 +2231,10 @@ export function createFeishuApiServer({
           action: 'archive',
           body,
           env,
-          envInfo,
+          envInfo: runtimeEnvInfo,
           fetchImpl,
           auditWriter,
-          rootDir: resolvedRoot,
+          rootDir: resolvedDataRoot,
         });
         sendJson(response, result.statusCode, result.payload);
         return;
@@ -2181,7 +2249,7 @@ export function createFeishuApiServer({
         const result = await recordApprovalAction({
           body,
           auditWriter,
-          rootDir: resolvedRoot,
+          rootDir: resolvedDataRoot,
         });
         sendJson(response, result.statusCode, result.payload);
         return;
@@ -2196,10 +2264,10 @@ export function createFeishuApiServer({
         const result = await executeClosedLoopProcess({
           body,
           env,
-          envInfo,
+          envInfo: runtimeEnvInfo,
           fetchImpl,
           auditWriter,
-          rootDir: resolvedRoot,
+          rootDir: resolvedDataRoot,
           emailAIRepository,
         });
         sendJson(response, result.statusCode, result.payload);
@@ -2215,10 +2283,10 @@ export function createFeishuApiServer({
         const result = await executeBotMessageAction({
           body,
           env,
-          envInfo,
+          envInfo: runtimeEnvInfo,
           fetchImpl,
           auditWriter,
-          rootDir: resolvedRoot,
+          rootDir: resolvedDataRoot,
         });
         sendJson(response, result.statusCode, result.payload);
         return;
@@ -2233,10 +2301,10 @@ export function createFeishuApiServer({
         const result = await ensureArchiveFolder({
           body,
           env,
-          envInfo,
+          envInfo: runtimeEnvInfo,
           fetchImpl,
           auditWriter,
-          rootDir: resolvedRoot,
+          rootDir: resolvedDataRoot,
         });
         sendJson(response, result.statusCode, result.payload);
         return;
@@ -2250,7 +2318,7 @@ export function createFeishuApiServer({
         const body = await readJsonBody(request);
         const result = await updateRiskOverrideAction({
           body,
-          rootDir: resolvedRoot,
+          rootDir: resolvedDataRoot,
         });
         sendJson(response, result.statusCode, result.payload);
         return;
@@ -2265,8 +2333,8 @@ export function createFeishuApiServer({
         const result = await updateFeishuLocalConfig({
           body,
           env,
-          envInfo,
-          rootDir: resolvedRoot,
+          envInfo: runtimeEnvInfo,
+          rootDir: resolvedDataRoot,
         });
         sendJson(response, result.statusCode, result.payload);
         return;
@@ -2302,8 +2370,12 @@ export function createFeishuApiServer({
   });
 
   server.on('listening', () => {
+    ensureDataRootReady();
+
     if (mailSyncEnabled) {
-      refreshMailSyncCache('startup');
+      ensureDataRootReady().then(() => refreshMailSyncCache('startup')).catch((error) => {
+        mailSyncStatus.lastError = error.message;
+      });
       mailSyncTimer = setInterval(() => {
         refreshMailSyncCache('interval');
       }, mailSyncIntervalMs);
@@ -2311,7 +2383,9 @@ export function createFeishuApiServer({
     }
 
     if (autoProcessScheduleEnabled) {
-      runScheduledAutoProcess('startup');
+      ensureDataRootReady().then(() => runScheduledAutoProcess('startup')).catch((error) => {
+        autoProcessStatus.lastError = error.message;
+      });
       autoProcessTimer = setInterval(() => {
         runScheduledAutoProcess('interval');
       }, autoProcessIntervalMs);
@@ -2340,15 +2414,21 @@ export function isCliEntryPoint(moduleUrl, argvPath) {
 if (isCliEntryPoint(import.meta.url, process.argv[1])) {
   const port = Number(process.env.PORT || DEFAULT_PORT);
   const rootDir = resolve(process.cwd());
-  const envInfo = loadLocalEnv({ rootDir });
+  const dataRoot = resolveWorkbenchDataRoot({
+    rootDir,
+    env: process.env,
+  });
+  const envInfo = loadLocalEnv({ rootDir: dataRoot });
+  const host = process.env.HOST || '0.0.0.0';
   const server = createFeishuApiServer({
     rootDir,
     env: envInfo.env,
     envInfo,
   });
 
-  server.listen(port, '127.0.0.1', () => {
-    console.log(`飞书邮箱工作台 API 代理已启动：http://127.0.0.1:${port}`);
+  server.listen(port, host, () => {
+    console.log(`飞书邮箱工作台 API 代理已启动：http://${host}:${port}`);
+    console.log(`运行数据目录：${dataRoot}`);
     console.log(`本地环境文件：${envInfo.loaded ? '已加载 .env.local' : '未发现 .env.local，使用当前 shell 环境变量'}`);
     console.log('真实写操作受 FEISHU_WRITE_ENABLED、原始来信人策略、审批和限额控制。App Secret / token 只从本地环境变量读取，不写入前端。');
   });

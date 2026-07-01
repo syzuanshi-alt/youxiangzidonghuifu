@@ -5,6 +5,7 @@
   "type": "module",
   "scripts": {
     "test": "node tests/rules.test.mjs",
+    "start": "node server/feishuApiServer.mjs",
     "dev": "python3 -m http.server 5174",
     "dev:api": "node server/feishuApiServer.mjs",
     "install:workbench-agent": "node scripts/installWorkbenchLaunchAgent.mjs",
