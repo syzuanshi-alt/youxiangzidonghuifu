@@ -78,6 +78,9 @@ import {
   readJsonPayload,
 } from '../src/httpResponse.js';
 import {
+  verifyWorkbenchCaptcha,
+} from '../server/workbenchCaptcha.mjs';
+import {
   DEFAULT_FEISHU_API_BASE,
   buildFeishuBatchGetUserIdRequest,
   buildFeishuBotTextMessageRequest,
@@ -2639,6 +2642,28 @@ try {
   });
 } finally {
   rmSync(captchaApiRoot, { recursive: true, force: true });
+}
+
+{
+  const verification = await verifyWorkbenchCaptcha({
+    env: {
+      WORKBENCH_CAPTCHA_REQUIRED: 'true',
+      WORKBENCH_CAPTCHA_PROVIDER: 'turnstile',
+      TURNSTILE_SITE_KEY: 'site-key-test',
+      TURNSTILE_SECRET_KEY: 'secret-key-test',
+    },
+    token: 'customer-token',
+    fetchImpl: async () => ({
+      ok: true,
+      json: async () => ({
+        success: false,
+        'error-codes': ['invalid-input-secret'],
+      }),
+    }),
+  });
+  assert.equal(verification.ok, false);
+  assert.deepEqual(verification.errorCodes, ['invalid-input-secret']);
+  assert.match(verification.message, /Secret Key.*Site Key|密钥/);
 }
 
 await withTestServer(createFeishuApiServer({

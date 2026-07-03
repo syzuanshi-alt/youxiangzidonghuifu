@@ -1933,11 +1933,15 @@ export function createFeishuApiServer({
       remoteIp: String(request.headers['x-forwarded-for'] || '').split(',')[0].trim(),
     });
     if (verification.ok) return null;
+    if (Array.isArray(verification.errorCodes) && verification.errorCodes.length > 0) {
+      console.warn('[workbench-auth] Turnstile verification failed:', verification.errorCodes.join(', '));
+    }
     return {
       statusCode: 400,
       payload: {
         ok: false,
         error: verification.error,
+        captchaErrorCodes: verification.errorCodes || [],
         message: verification.message || '请先完成人机真人验证。',
       },
     };

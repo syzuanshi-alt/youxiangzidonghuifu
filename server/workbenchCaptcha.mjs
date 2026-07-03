@@ -14,6 +14,30 @@ export function buildWorkbenchCaptchaConfig(env = {}) {
   };
 }
 
+function normalizeTurnstileErrorCodes(payload = {}) {
+  const codes = Array.isArray(payload['error-codes']) ? payload['error-codes'] : [];
+  return codes.map((code) => String(code || '').trim()).filter(Boolean);
+}
+
+function messageForTurnstileErrorCodes(errorCodes = []) {
+  if (errorCodes.includes('invalid-input-secret') || errorCodes.includes('missing-input-secret')) {
+    return '真人验证失败：Turnstile Secret Key 不正确，或与 Site Key 不属于同一个 widget。请检查 Railway 的 TURNSTILE_SECRET_KEY。';
+  }
+  if (errorCodes.includes('invalid-input-response') || errorCodes.includes('missing-input-response')) {
+    return '真人验证失败：验证码结果无效或未提交，请刷新页面后重新验证。';
+  }
+  if (errorCodes.includes('timeout-or-duplicate')) {
+    return '真人验证已过期或被重复使用，请重新完成验证后再提交。';
+  }
+  if (errorCodes.includes('bad-request')) {
+    return '真人验证失败：验证请求格式异常，请刷新页面后重试。';
+  }
+  if (errorCodes.includes('internal-error')) {
+    return '真人验证服务临时异常，请稍后重试。';
+  }
+  return '真人验证失败，请重试。';
+}
+
 export async function verifyWorkbenchCaptcha({
   env = {},
   token = '',
@@ -64,10 +88,12 @@ export async function verifyWorkbenchCaptcha({
   const payload = await response.json().catch(() => ({}));
 
   if (!response.ok || payload.success !== true) {
+    const errorCodes = normalizeTurnstileErrorCodes(payload);
     return {
       ok: false,
       error: 'workbench_captcha_invalid',
-      message: '真人验证失败，请重试。',
+      errorCodes,
+      message: messageForTurnstileErrorCodes(errorCodes),
     };
   }
 
