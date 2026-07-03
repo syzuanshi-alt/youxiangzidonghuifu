@@ -690,6 +690,27 @@ function mountWorkbenchCaptcha() {
   }
 }
 
+function loginSubmitLabel(isCreate = false) {
+  return authChecking ? '验证中' : isCreate ? '创建并进入工作台' : '登录工作台';
+}
+
+function buildLoginFeedbackHtml() {
+  return [
+    loginError ? `<div class="login-message error">${displayText(loginError)}</div>` : '',
+    loginStatus ? `<div class="login-message">${displayText(loginStatus)}</div>` : '',
+  ].join('');
+}
+
+function updateLoginFormState(form, isCreate = false) {
+  const feedback = form?.querySelector('[data-login-feedback]');
+  if (feedback) feedback.innerHTML = buildLoginFeedbackHtml();
+  const submitButton = form?.querySelector('button[type="submit"]');
+  if (submitButton) {
+    submitButton.textContent = loginSubmitLabel(isCreate);
+    submitButton.disabled = authChecking;
+  }
+}
+
 function renderLoginGate() {
   if (!loginGateEl || !loginCardEl) return;
 
@@ -759,10 +780,9 @@ function renderLoginGate() {
         <span>保持登录状态</span>
       </label>
 
-      ${loginError ? `<div class="login-message error">${displayText(loginError)}</div>` : ''}
-      ${loginStatus ? `<div class="login-message">${displayText(loginStatus)}</div>` : ''}
+      <div data-login-feedback>${buildLoginFeedbackHtml()}</div>
 
-      <button class="primary-button login-submit" type="submit">${authChecking ? '验证中' : isCreate ? '创建并进入工作台' : '登录工作台'}</button>
+      <button class="primary-button login-submit" type="submit" ${authChecking ? 'disabled' : ''}>${loginSubmitLabel(isCreate)}</button>
     </form>
   `;
 
@@ -800,7 +820,7 @@ function renderLoginGate() {
     authChecking = true;
     loginError = '';
     loginStatus = isCreate ? '正在创建账号...' : '正在登录...';
-    renderLoginGate();
+    updateLoginFormState(event.currentTarget, isCreate);
 
     try {
       const payload = await fetchWorkbenchAuthJson(

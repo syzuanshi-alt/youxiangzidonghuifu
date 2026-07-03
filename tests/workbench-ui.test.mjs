@@ -178,7 +178,7 @@ function startStaticServer() {
   });
 }
 
-async function installApiRoutes(page, capturedActions) {
+async function installApiRoutes(page, capturedActions, options = {}) {
   const authState = {
     phone: '',
     session: '',
@@ -230,6 +230,9 @@ async function installApiRoutes(page, capturedActions) {
           body: JSON.stringify({ ok: false, message: '请先完成人机真人验证。' }),
         });
         return;
+      }
+      if (options.authDelayMs) {
+        await new Promise((resolve) => setTimeout(resolve, options.authDelayMs));
       }
       authState.phone = String(payload.phone || '');
       authState.session = 'ui-test-session';
@@ -521,7 +524,7 @@ try {
     await dialog.accept();
   });
 
-  await installApiRoutes(page, capturedActions);
+  await installApiRoutes(page, capturedActions, { authDelayMs: 250 });
   await page.addInitScript(() => {
     localStorage.removeItem('email-auto-reply-workbench-accounts');
     localStorage.removeItem('email-auto-reply-workbench-session');
@@ -545,8 +548,12 @@ try {
   await page.locator('input[name="rememberAccount"]').check();
   await page.evaluate(() => {
     document.querySelector('input[name="captchaToken"]').value = 'ui-captcha-token';
+    window.__captchaWidgetBeforeSubmit = document.querySelector('[data-turnstile-widget]');
   });
   await page.locator('[data-workbench-login-form]').locator('button[type="submit"]').click();
+  await page.waitForTimeout(50);
+  const captchaWidgetStayedMounted = await page.evaluate(() => window.__captchaWidgetBeforeSubmit?.isConnected === true);
+  assert.equal(captchaWidgetStayedMounted, true);
   await waitForText(page, '数据总览');
   const storedAccounts = await page.evaluate(() => localStorage.getItem('email-auto-reply-workbench-accounts'));
   const storedSmsCodes = await page.evaluate(() => localStorage.getItem('email-auto-reply-workbench-sms-codes'));
