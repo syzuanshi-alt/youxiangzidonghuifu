@@ -616,11 +616,15 @@ function buildClearWorkbenchSessionCookie(request) {
 }
 
 function normalizeWorkbenchPhone(value = '') {
-  return String(value || '').trim().replace(/[^\d+]/g, '');
+  const digits = String(value || '').trim().replace(/[^\d]/g, '');
+  if (digits.length === 13 && digits.startsWith('86')) {
+    return digits.slice(2);
+  }
+  return digits;
 }
 
 function isValidWorkbenchPhone(value = '') {
-  return /^\+?\d{6,20}$/.test(normalizeWorkbenchPhone(value));
+  return /^\d{6,20}$/.test(normalizeWorkbenchPhone(value));
 }
 
 function unauthorizedWorkbenchPayload(message = '请先登录工作台。') {
@@ -2592,6 +2596,13 @@ export function createFeishuApiServer({
         sendJson(response, 200, {
           ...buildPublicFeishuApiStatus(env),
           write: buildPublicFeishuWriteStatus(env),
+          workbenchStorage: {
+            dataRootConfigured: Boolean(env.WORKBENCH_DATA_DIR || env.RAILWAY_VOLUME_MOUNT_PATH),
+            workbenchDataDirConfigured: Boolean(env.WORKBENCH_DATA_DIR),
+            railwayVolumeMountPathConfigured: Boolean(env.RAILWAY_VOLUME_MOUNT_PATH),
+            localEnvLoaded: Boolean(runtimeEnvInfo.loaded),
+          },
+          workbenchAuth: await workbenchAuthStore.getStorageStatus(),
           mailSync: {
             ...mailSyncStatus,
             inFlight: mailSyncStatus.inFlight || Boolean(mailSyncPromise),

@@ -2470,6 +2470,13 @@ try {
   await authStore.updatePassword({ phone: '18800000000', newPassword: 'ChangedPass123' });
   assert.equal(await authStore.verifyPassword('18800000000', 'StrongPass123'), false);
   assert.equal(await authStore.verifyPassword('18800000000', 'ChangedPass123'), true);
+  const countryCodeUser = await authStore.createUser({
+    phone: '+86 17694856832',
+    password: 'CountryCodePass123',
+  });
+  assert.equal(countryCodeUser.user.phone, '17694856832');
+  assert.equal(await authStore.verifyPassword('17694856832', 'CountryCodePass123'), true);
+  assert.equal(await authStore.verifyPassword('8617694856832', 'CountryCodePass123'), true);
 
   const session = await authStore.createSession({
     phone: '18800000000',
@@ -2702,6 +2709,47 @@ try {
       headers: { cookie: resetPasswordLoginCookie || resetPasswordCookie || changePasswordCookie },
     });
     assert.notEqual(authenticatedMessagesResponse.status, 401);
+
+    const countryCodeRegisterResponse = await fetch(`${baseUrl}/api/workbench-auth/register`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({
+        phone: '+86 17694856832',
+        password: 'CountryCodePass123',
+        inviteCode: 'invite-code',
+      }),
+    });
+    const countryCodeRegisterPayload = await countryCodeRegisterResponse.json();
+    assert.equal(countryCodeRegisterResponse.status, 201);
+    assert.equal(countryCodeRegisterPayload.user.phone, '17694856832');
+
+    const countryCodeLoginResponse = await fetch(`${baseUrl}/api/workbench-auth/login`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({
+        phone: '17694856832',
+        password: 'CountryCodePass123',
+      }),
+    });
+    assert.equal(countryCodeLoginResponse.status, 200);
+
+    const countryCodeResetResponse = await fetch(`${baseUrl}/api/workbench-auth/reset-password`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({
+        phone: '8617694856832',
+        newPassword: 'CountryReset123',
+        resetCode: 'invite-code',
+      }),
+    });
+    assert.equal(countryCodeResetResponse.status, 200);
+
+    const statusAfterAuthResponse = await fetch(`${baseUrl}/api/feishu/status`);
+    const statusAfterAuthPayload = await statusAfterAuthResponse.json();
+    assert.equal(statusAfterAuthPayload.workbenchAuth.storeFileExists, true);
+    assert.equal(statusAfterAuthPayload.workbenchAuth.hasUsers, true);
+    assert.equal(statusAfterAuthPayload.workbenchAuth.userCount >= 2, true);
+    assert.equal(JSON.stringify(statusAfterAuthPayload.workbenchAuth).includes('17694856832'), false);
   });
 } finally {
   rmSync(authApiRoot, { recursive: true, force: true });

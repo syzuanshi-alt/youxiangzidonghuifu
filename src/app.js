@@ -587,11 +587,15 @@ function saveKnowledgeItems() {
 }
 
 function normalizePhone(value = '') {
-  return String(value || '').trim().replace(/[^\d+]/g, '');
+  const digits = String(value || '').trim().replace(/[^\d]/g, '');
+  if (digits.length === 13 && digits.startsWith('86')) {
+    return digits.slice(2);
+  }
+  return digits;
 }
 
 function isValidPhone(phone = '') {
-  return /^\+?\d{6,20}$/.test(phone);
+  return /^\d{6,20}$/.test(normalizePhone(phone));
 }
 
 function maskPhone(phone = '') {

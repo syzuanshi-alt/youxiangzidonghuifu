@@ -1,5 +1,5 @@
 import { randomBytes, scrypt as scryptCallback, timingSafeEqual } from 'node:crypto';
-import { mkdir, readFile, writeFile } from 'node:fs/promises';
+import { mkdir, readFile, stat, writeFile } from 'node:fs/promises';
 import { dirname, join } from 'node:path';
 import { promisify } from 'node:util';
 
@@ -17,7 +17,11 @@ function defaultStore() {
 }
 
 function normalizePhone(phone = '') {
-  return String(phone || '').trim().replace(/[^\d+]/g, '');
+  const digits = String(phone || '').trim().replace(/[^\d]/g, '');
+  if (digits.length === 13 && digits.startsWith('86')) {
+    return digits.slice(2);
+  }
+  return digits;
 }
 
 function publicUser(record = {}) {
@@ -205,6 +209,27 @@ export function createWorkbenchAuthStore({
     return store.users.length;
   }
 
+  async function getStorageStatus() {
+    const store = await readStore();
+    let storeFileExists = true;
+    try {
+      await stat(storePath);
+    } catch (error) {
+      if (error.code === 'ENOENT') {
+        storeFileExists = false;
+      } else {
+        throw error;
+      }
+    }
+
+    return {
+      storeFileExists,
+      hasUsers: store.users.length > 0,
+      userCount: store.users.length,
+      sessionCount: store.sessions.length,
+    };
+  }
+
   return {
     createUser,
     findUserByPhone,
@@ -214,6 +239,7 @@ export function createWorkbenchAuthStore({
     findSession,
     deleteSession,
     countUsers,
+    getStorageStatus,
     readStore,
   };
 }
