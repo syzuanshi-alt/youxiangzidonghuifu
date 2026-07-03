@@ -2065,6 +2065,117 @@ export function createFeishuApiServer({
     }, session, rememberLogin);
   }
 
+  async function handleWorkbenchResetPassword(request, response) {
+    const body = await readJsonBody(request);
+    const captchaError = await verifyWorkbenchHuman(request, body);
+    if (captchaError) {
+      sendWorkbenchAuthJson(response, request, captchaError.statusCode, captchaError.payload);
+      return;
+    }
+
+    const phone = normalizeWorkbenchPhone(body.phone);
+    const newPassword = String(body.newPassword || body.new_password || '');
+    if (!isValidWorkbenchPhone(phone)) {
+      sendWorkbenchAuthJson(response, request, 400, {
+        ok: false,
+        error: 'workbench_phone_invalid',
+        message: '请输入有效手机号。',
+      });
+      return;
+    }
+    if (newPassword.length < 8) {
+      sendWorkbenchAuthJson(response, request, 400, {
+        ok: false,
+        error: 'workbench_password_too_short',
+        message: '新密码至少需要 8 位。',
+      });
+      return;
+    }
+
+    const resetCode = String(env.WORKBENCH_PASSWORD_RESET_CODE || env.WORKBENCH_SIGNUP_INVITE_CODE || '').trim();
+    const submittedResetCode = String(body.resetCode || body.reset_code || body.inviteCode || body.invite_code || '').trim();
+    if (!resetCode) {
+      sendWorkbenchAuthJson(response, request, 403, {
+        ok: false,
+        error: 'workbench_password_reset_disabled',
+        message: '管理员还没有配置密码重置码。',
+      });
+      return;
+    }
+    if (submittedResetCode !== resetCode) {
+      sendWorkbenchAuthJson(response, request, 403, {
+        ok: false,
+        error: 'workbench_password_reset_code_invalid',
+        message: '密码重置码不正确。',
+      });
+      return;
+    }
+
+    const existingUser = await workbenchAuthStore.findUserByPhone(phone);
+    if (!existingUser) {
+      sendWorkbenchAuthJson(response, request, 404, {
+        ok: false,
+        error: 'workbench_account_not_found',
+        message: '未找到这个手机号对应的工作台账号。',
+      });
+      return;
+    }
+
+    const updated = await workbenchAuthStore.updatePassword({ phone, newPassword });
+    const rememberLogin = body.rememberLogin === true || body.remember_login === true;
+    const session = await workbenchAuthStore.createSession({ phone, rememberLogin });
+    sendWorkbenchSession(response, request, 200, {
+      ok: true,
+      user: updated.user,
+      message: '密码已重置并登录。',
+    }, session, rememberLogin);
+  }
+
+  async function handleWorkbenchChangePassword(request, response) {
+    const body = await readJsonBody(request);
+    const session = await findWorkbenchSession(request);
+    if (!session) {
+      sendWorkbenchAuthJson(response, request, 401, unauthorizedWorkbenchPayload());
+      return;
+    }
+
+    const currentPassword = String(body.currentPassword || body.current_password || '');
+    const newPassword = String(body.newPassword || body.new_password || '');
+    if (!currentPassword || newPassword.length < 8) {
+      sendWorkbenchAuthJson(response, request, 400, {
+        ok: false,
+        error: 'workbench_password_invalid',
+        message: '请输入当前密码，并设置至少 8 位的新密码。',
+      });
+      return;
+    }
+
+    const verified = await workbenchAuthStore.verifyPassword(session.user.phone, currentPassword);
+    if (!verified) {
+      sendWorkbenchAuthJson(response, request, 401, {
+        ok: false,
+        error: 'workbench_current_password_invalid',
+        message: '当前密码不正确。',
+      });
+      return;
+    }
+
+    const updated = await workbenchAuthStore.updatePassword({
+      phone: session.user.phone,
+      newPassword,
+    });
+    const rememberLogin = body.rememberLogin === true || body.remember_login === true;
+    const nextSession = await workbenchAuthStore.createSession({
+      phone: session.user.phone,
+      rememberLogin,
+    });
+    sendWorkbenchSession(response, request, 200, {
+      ok: true,
+      user: updated.user,
+      message: '密码已修改，请使用新密码登录。',
+    }, nextSession, rememberLogin);
+  }
+
   async function handleWorkbenchLogout(request, response) {
     const cookies = parseCookieHeader(request.headers.cookie || '');
     await workbenchAuthStore.deleteSession(cookies[WORKBENCH_SESSION_COOKIE] || '');
@@ -2285,6 +2396,24 @@ export function createFeishuApiServer({
           return;
         }
         await handleWorkbenchLogin(request, response);
+        return;
+      }
+
+      if (requestUrl.pathname === '/api/workbench-auth/reset-password') {
+        if (request.method !== 'POST') {
+          sendMethodNotAllowed(response);
+          return;
+        }
+        await handleWorkbenchResetPassword(request, response);
+        return;
+      }
+
+      if (requestUrl.pathname === '/api/workbench-auth/change-password') {
+        if (request.method !== 'POST') {
+          sendMethodNotAllowed(response);
+          return;
+        }
+        await handleWorkbenchChangePassword(request, response);
         return;
       }
 

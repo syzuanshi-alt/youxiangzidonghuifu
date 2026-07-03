@@ -2467,6 +2467,9 @@ try {
   assert.notEqual(created.rawRecord.passwordHash, 'StrongPass123');
   assert.equal(await authStore.verifyPassword('18800000000', 'StrongPass123'), true);
   assert.equal(await authStore.verifyPassword('18800000000', 'wrong-password'), false);
+  await authStore.updatePassword({ phone: '18800000000', newPassword: 'ChangedPass123' });
+  assert.equal(await authStore.verifyPassword('18800000000', 'StrongPass123'), false);
+  assert.equal(await authStore.verifyPassword('18800000000', 'ChangedPass123'), true);
 
   const session = await authStore.createSession({
     phone: '18800000000',
@@ -2592,8 +2595,111 @@ try {
     assert.equal(loginResponse.status, 200);
     assert.match(loginResponse.headers.get('set-cookie'), /workbench_session=/);
 
+    const unauthenticatedChangePasswordResponse = await fetch(`${baseUrl}/api/workbench-auth/change-password`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({
+        currentPassword: 'StrongPass123',
+        newPassword: 'ChangedPass123',
+      }),
+    });
+    assert.equal(unauthenticatedChangePasswordResponse.status, 401);
+
+    const wrongCurrentPasswordResponse = await fetch(`${baseUrl}/api/workbench-auth/change-password`, {
+      method: 'POST',
+      headers: {
+        'content-type': 'application/json',
+        cookie: loginCookie,
+      },
+      body: JSON.stringify({
+        currentPassword: 'wrong-password',
+        newPassword: 'ChangedPass123',
+      }),
+    });
+    assert.equal(wrongCurrentPasswordResponse.status, 401);
+
+    const changePasswordResponse = await fetch(`${baseUrl}/api/workbench-auth/change-password`, {
+      method: 'POST',
+      headers: {
+        'content-type': 'application/json',
+        cookie: loginCookie,
+      },
+      body: JSON.stringify({
+        currentPassword: 'StrongPass123',
+        newPassword: 'ChangedPass123',
+      }),
+    });
+    const changePasswordCookie = cookieHeaderFromResponse(changePasswordResponse);
+    assert.equal(changePasswordResponse.status, 200);
+    assert.match(changePasswordResponse.headers.get('set-cookie'), /workbench_session=/);
+
+    const oldPasswordAfterChangeResponse = await fetch(`${baseUrl}/api/workbench-auth/login`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({
+        phone: '18800000000',
+        password: 'StrongPass123',
+      }),
+    });
+    assert.equal(oldPasswordAfterChangeResponse.status, 401);
+
+    const newPasswordAfterChangeResponse = await fetch(`${baseUrl}/api/workbench-auth/login`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({
+        phone: '18800000000',
+        password: 'ChangedPass123',
+      }),
+    });
+    assert.equal(newPasswordAfterChangeResponse.status, 200);
+
+    const wrongResetCodeResponse = await fetch(`${baseUrl}/api/workbench-auth/reset-password`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({
+        phone: '18800000000',
+        newPassword: 'ResetPass123',
+        resetCode: 'wrong-code',
+      }),
+    });
+    assert.equal(wrongResetCodeResponse.status, 403);
+
+    const resetPasswordResponse = await fetch(`${baseUrl}/api/workbench-auth/reset-password`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({
+        phone: '18800000000',
+        newPassword: 'ResetPass123',
+        resetCode: 'invite-code',
+      }),
+    });
+    assert.equal(resetPasswordResponse.status, 200);
+    assert.match(resetPasswordResponse.headers.get('set-cookie'), /workbench_session=/);
+    const resetPasswordCookie = cookieHeaderFromResponse(resetPasswordResponse);
+
+    const changedPasswordAfterResetResponse = await fetch(`${baseUrl}/api/workbench-auth/login`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({
+        phone: '18800000000',
+        password: 'ChangedPass123',
+      }),
+    });
+    assert.equal(changedPasswordAfterResetResponse.status, 401);
+
+    const resetPasswordLoginResponse = await fetch(`${baseUrl}/api/workbench-auth/login`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({
+        phone: '18800000000',
+        password: 'ResetPass123',
+      }),
+    });
+    assert.equal(resetPasswordLoginResponse.status, 200);
+    const resetPasswordLoginCookie = cookieHeaderFromResponse(resetPasswordLoginResponse);
+
     const authenticatedMessagesResponse = await fetch(`${baseUrl}/api/feishu/mail/messages?all=true&page_size=1`, {
-      headers: { cookie: loginCookie },
+      headers: { cookie: resetPasswordLoginCookie || resetPasswordCookie || changePasswordCookie },
     });
     assert.notEqual(authenticatedMessagesResponse.status, 401);
   });

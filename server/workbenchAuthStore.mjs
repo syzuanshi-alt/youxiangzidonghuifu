@@ -121,6 +121,24 @@ export function createWorkbenchAuthStore({
     return verifyPasswordHash(password, record.passwordHash);
   }
 
+  async function updatePassword({ phone, newPassword } = {}) {
+    const normalizedPhone = normalizePhone(phone);
+    const store = await readStore();
+    const record = store.users.find((user) => user.phone === normalizedPhone);
+    if (!record) {
+      throw new Error('账号不存在。');
+    }
+
+    record.passwordHash = await hashPassword(newPassword);
+    store.sessions = store.sessions.filter((item) => item.phone !== normalizedPhone);
+    await writeStore(store);
+
+    return {
+      user: publicUser(record),
+      rawRecord: record,
+    };
+  }
+
   async function createSession({ phone, rememberLogin = false } = {}) {
     const normalizedPhone = normalizePhone(phone);
     const store = await readStore();
@@ -191,6 +209,7 @@ export function createWorkbenchAuthStore({
     createUser,
     findUserByPhone,
     verifyPassword,
+    updatePassword,
     createSession,
     findSession,
     deleteSession,

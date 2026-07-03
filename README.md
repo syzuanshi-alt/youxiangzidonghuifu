@@ -318,6 +318,7 @@ WORKBENCH_DATA_DIR=/data
 WORKBENCH_AUTH_REQUIRED=true
 WORKBENCH_SESSION_SECRET=生成一个随机长密钥
 WORKBENCH_SIGNUP_INVITE_CODE=内部开户注册码
+WORKBENCH_PASSWORD_RESET_CODE=内部密码重置码；不填时沿用开户注册码
 WORKBENCH_SESSION_TTL_HOURS=8
 WORKBENCH_REMEMBER_TTL_DAYS=30
 WORKBENCH_CAPTCHA_REQUIRED=true
@@ -356,7 +357,7 @@ FEISHU_DAILY_ARCHIVE_LIMIT=0
 
 默认 `/oauth/start` 只申请 `offline_access`、邮件读取正文 / 地址 / 主题和 `mail:user_mailbox.message:send`。归档 / 移箱、飞书机器人通知等第二阶段能力需要先在飞书开放平台追加权限，再用 `FEISHU_OAUTH_SCOPE` 显式覆盖授权范围。
 
-工作台登录保护使用手机号 + 密码，密码只在服务端以加盐哈希保存；浏览器只可记住账号，不能明文保存密码。真人验证默认使用 Cloudflare Turnstile，未配置 `TURNSTILE_SITE_KEY` / `TURNSTILE_SECRET_KEY` 时不要在公网开启 `WORKBENCH_CAPTCHA_REQUIRED=true`。短信验证码登录第一版未启用，不会再显示本地模拟短信。
+工作台登录保护使用手机号 + 密码，密码只在服务端以加盐哈希保存；浏览器只可记住账号，不能明文保存密码。创建过账号后，后续直接使用手机号和密码登录。已登录用户可在“账号与登录”里输入当前密码修改密码；忘记密码时需要手机号、新密码、密码重置码和真人验证，`WORKBENCH_PASSWORD_RESET_CODE` 未配置时会沿用 `WORKBENCH_SIGNUP_INVITE_CODE`。真人验证默认使用 Cloudflare Turnstile，未配置 `TURNSTILE_SITE_KEY` / `TURNSTILE_SECRET_KEY` 时不要在公网开启 `WORKBENCH_CAPTCHA_REQUIRED=true`。短信验证码登录第一版未启用，不会再显示本地模拟短信。
 
 回滚或紧急暂停时，立即关闭：
 

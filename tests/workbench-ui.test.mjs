@@ -181,6 +181,7 @@ function startStaticServer() {
 async function installApiRoutes(page, capturedActions, options = {}) {
   const authState = {
     phone: '',
+    password: 'StrongPass123',
     session: '',
   };
 
@@ -221,7 +222,7 @@ async function installApiRoutes(page, capturedActions, options = {}) {
       return;
     }
 
-    if (path === '/api/workbench-auth/register' || path === '/api/workbench-auth/login') {
+    if (path === '/api/workbench-auth/register' || path === '/api/workbench-auth/login' || path === '/api/workbench-auth/reset-password') {
       const payload = JSON.parse(request.postData() || '{}');
       if (!payload.captchaToken) {
         await route.fulfill({
@@ -235,6 +236,7 @@ async function installApiRoutes(page, capturedActions, options = {}) {
         await new Promise((resolve) => setTimeout(resolve, options.authDelayMs));
       }
       authState.phone = String(payload.phone || '');
+      authState.password = String(payload.newPassword || payload.password || authState.password);
       authState.session = 'ui-test-session';
       await route.fulfill({
         status: path.endsWith('/register') ? 201 : 200,
@@ -245,6 +247,41 @@ async function installApiRoutes(page, capturedActions, options = {}) {
         body: JSON.stringify({
           ok: true,
           user: { phone: authState.phone, createdAt: '2026-07-03T00:00:00.000Z' },
+        }),
+      });
+      return;
+    }
+
+    if (path === '/api/workbench-auth/change-password') {
+      const payload = JSON.parse(request.postData() || '{}');
+      if (!authState.session) {
+        await route.fulfill({
+          status: 401,
+          contentType: 'application/json',
+          body: JSON.stringify({ ok: false, message: '请先登录工作台。' }),
+        });
+        return;
+      }
+      if (payload.currentPassword !== authState.password) {
+        await route.fulfill({
+          status: 401,
+          contentType: 'application/json',
+          body: JSON.stringify({ ok: false, message: '当前密码不正确。' }),
+        });
+        return;
+      }
+      authState.password = String(payload.newPassword || '');
+      authState.session = 'ui-test-session-changed';
+      capturedActions.push({ type: 'change-password', payload });
+      await route.fulfill({
+        contentType: 'application/json',
+        headers: {
+          'set-cookie': 'workbench_session=ui-test-session-changed; Path=/; HttpOnly; SameSite=Lax',
+        },
+        body: JSON.stringify({
+          ok: true,
+          user: { phone: authState.phone, createdAt: '2026-07-03T00:00:00.000Z' },
+          message: '密码已修改。',
         }),
       });
       return;
@@ -506,6 +543,7 @@ const browser = await chromium.launch({ headless: true });
 const capturedActions = [];
 const consoleErrors = [];
 const pageErrors = [];
+const httpErrors = [];
 
 try {
   const page = await browser.newPage();
@@ -520,8 +558,34 @@ try {
   page.on('pageerror', (error) => {
     pageErrors.push(error.message);
   });
+  page.on('response', (response) => {
+    if (response.status() >= 400 && response.status() !== 401) {
+      httpErrors.push(`${response.status()} ${response.url()}`);
+    }
+  });
   page.on('dialog', async (dialog) => {
     await dialog.accept();
+  });
+
+  await page.route('https://challenges.cloudflare.com/**', async (route) => {
+    const url = route.request().url();
+    if (url.includes('/turnstile/v0/api.js')) {
+      await route.fulfill({
+        contentType: 'application/javascript',
+        body: `
+          window.turnstile = {
+            render: (element, options) => {
+              element.dataset.testTurnstileRendered = 'true';
+              window.__lastTurnstileOptions = options;
+              return 'ui-test-turnstile-widget';
+            },
+            reset: () => {}
+          };
+        `,
+      });
+      return;
+    }
+    await route.fulfill({ status: 204, body: '' });
   });
 
   await installApiRoutes(page, capturedActions, { authDelayMs: 250 });
@@ -541,6 +605,8 @@ try {
   await waitForText(page, '登录工作台');
   await waitForText(page, '真人验证');
   assert.equal(await page.getByText('本地模拟短信验证码').count(), 0);
+  await page.locator('[data-login-mode="reset"]').click();
+  await waitForText(page, '重置工作台密码');
   await page.locator('[data-login-mode="create"]').click();
   await page.locator('input[name="phone"]').fill('18800000000');
   await page.locator('input[name="password"]').fill('StrongPass123');
@@ -561,6 +627,29 @@ try {
   assert.equal(storedAccounts, null);
   assert.equal(storedSmsCodes, null);
   assert.equal(rememberedPhone, '18800000000');
+
+  await page.locator('[data-overview-open-settings]').first().click();
+  await page.locator('[data-settings-primary="account-session"]').click();
+  await waitForText(page, '账号与登录');
+  await page.locator('[data-account-change-password-form] input[name="currentPassword"]').fill('StrongPass123');
+  await page.locator('[data-account-change-password-form] input[name="newPassword"]').fill('ChangedPass123');
+  await page.locator('[data-account-change-password-form] input[name="confirmPassword"]').fill('ChangedPass123');
+  await page.locator('[data-account-change-password-form] button[type="submit"]').click();
+  await waitForText(page, '密码已修改');
+  assert.equal(capturedActions.some((item) => item.type === 'change-password' && item.payload.newPassword === 'ChangedPass123'), true);
+
+  await page.locator('[data-settings-logout-workbench]').click();
+  await waitForText(page, '登录工作台');
+  await page.locator('[data-login-mode="reset"]').click();
+  const resetForm = page.locator('[data-workbench-login-form]');
+  await resetForm.locator('input[name="phone"]').fill('18800000000');
+  await resetForm.locator('input[name="password"]').fill('ResetPass123');
+  await resetForm.locator('input[name="resetCode"]').fill('invite-code');
+  await page.evaluate(() => {
+    document.querySelector('input[name="captchaToken"]').value = 'ui-reset-captcha-token';
+  });
+  await page.locator('[data-workbench-login-form]').locator('button[type="submit"]').click();
+  await waitForText(page, '数据总览');
 
   await page.locator('.overview-stat-card.completed').click();
   await waitForText(page, '邮箱');
@@ -701,6 +790,7 @@ try {
   await waitForText(page, '执行链路预览');
 
   assert.deepEqual(pageErrors, []);
+  assert.deepEqual(httpErrors, []);
   assert.deepEqual(consoleErrors, []);
   console.log('workbench-ui.test.mjs passed');
 } finally {

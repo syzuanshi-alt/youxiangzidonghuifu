@@ -336,6 +336,9 @@ let loginMode = 'login';
 let loginStatus = '';
 let loginError = '';
 let loginDraftPhone = localStorage.getItem(WORKBENCH_REMEMBERED_PHONE_KEY) || '';
+let accountPasswordStatus = '';
+let accountPasswordError = '';
+let accountPasswordChecking = false;
 let captchaConfig = {
   required: false,
   provider: 'disabled',
@@ -690,8 +693,11 @@ function mountWorkbenchCaptcha() {
   }
 }
 
-function loginSubmitLabel(isCreate = false) {
-  return authChecking ? '验证中' : isCreate ? '创建并进入工作台' : '登录工作台';
+function loginSubmitLabel(mode = loginMode) {
+  if (authChecking) return '验证中';
+  if (mode === 'create') return '创建并进入工作台';
+  if (mode === 'reset') return '重置并登录';
+  return '登录工作台';
 }
 
 function buildLoginFeedbackHtml() {
@@ -701,12 +707,12 @@ function buildLoginFeedbackHtml() {
   ].join('');
 }
 
-function updateLoginFormState(form, isCreate = false) {
+function updateLoginFormState(form, mode = loginMode) {
   const feedback = form?.querySelector('[data-login-feedback]');
   if (feedback) feedback.innerHTML = buildLoginFeedbackHtml();
   const submitButton = form?.querySelector('button[type="submit"]');
   if (submitButton) {
-    submitButton.textContent = loginSubmitLabel(isCreate);
+    submitButton.textContent = loginSubmitLabel(mode);
     submitButton.disabled = authChecking;
   }
 }
@@ -726,6 +732,7 @@ function renderLoginGate() {
   if (loggedIn) return;
 
   const isCreate = loginMode === 'create';
+  const isReset = loginMode === 'reset';
   const rememberedPhone = localStorage.getItem(WORKBENCH_REMEMBERED_PHONE_KEY) || '';
   const captchaBlock = captchaConfig.required
     ? `
@@ -741,13 +748,14 @@ function renderLoginGate() {
   loginCardEl.innerHTML = `
     <div class="login-heading">
       <span>邮件自动回复工作台</span>
-      <h1>${isCreate ? '创建工作台账号' : '登录工作台'}</h1>
-      <p>使用手机号和密码登录。密码由浏览器密码管理器保存，工作台不会明文保存。</p>
+      <h1>${isCreate ? '创建工作台账号' : isReset ? '重置工作台密码' : '登录工作台'}</h1>
+      <p>${isReset ? '输入手机号、新密码和管理员提供的重置码。' : '使用手机号和密码登录。密码由浏览器密码管理器保存，工作台不会明文保存。'}</p>
     </div>
 
     <div class="login-mode-tabs">
       <button type="button" class="${loginMode === 'login' ? 'active' : ''}" data-login-mode="login">登录账号</button>
       <button type="button" class="${loginMode === 'create' ? 'active' : ''}" data-login-mode="create">创建账号</button>
+      <button type="button" class="${loginMode === 'reset' ? 'active' : ''}" data-login-mode="reset">忘记密码</button>
     </div>
 
     <form class="login-form" data-workbench-login-form>
@@ -757,14 +765,21 @@ function renderLoginGate() {
       </label>
 
       <label>
-        <span>密码${isCreate ? '（至少 8 位）' : ''}</span>
-        <input name="password" type="password" autocomplete="${isCreate ? 'new-password' : 'current-password'}" placeholder="${isCreate ? '设置登录密码' : '请输入密码'}" />
+        <span>${isReset ? '新密码' : '密码'}${isCreate || isReset ? '（至少 8 位）' : ''}</span>
+        <input name="password" type="password" autocomplete="${isCreate || isReset ? 'new-password' : 'current-password'}" placeholder="${isCreate ? '设置登录密码' : isReset ? '设置新密码' : '请输入密码'}" />
       </label>
 
       ${isCreate ? `
         <label>
           <span>开户注册码</span>
           <input name="inviteCode" autocomplete="off" placeholder="请输入管理员提供的邀请码" />
+        </label>
+      ` : ''}
+
+      ${isReset ? `
+        <label>
+          <span>密码重置码</span>
+          <input name="resetCode" autocomplete="off" placeholder="请输入管理员提供的重置码" />
         </label>
       ` : ''}
 
@@ -782,7 +797,7 @@ function renderLoginGate() {
 
       <div data-login-feedback>${buildLoginFeedbackHtml()}</div>
 
-      <button class="primary-button login-submit" type="submit" ${authChecking ? 'disabled' : ''}>${loginSubmitLabel(isCreate)}</button>
+      <button class="primary-button login-submit" type="submit" ${authChecking ? 'disabled' : ''}>${loginSubmitLabel(loginMode)}</button>
     </form>
   `;
 
@@ -810,8 +825,8 @@ function renderLoginGate() {
       return;
     }
 
-    if (password.length < (isCreate ? 8 : 1)) {
-      loginError = isCreate ? '密码至少需要 8 位。' : '请输入密码。';
+    if (password.length < (isCreate || isReset ? 8 : 1)) {
+      loginError = isCreate || isReset ? '密码至少需要 8 位。' : '请输入密码。';
       loginStatus = '';
       renderLoginGate();
       return;
@@ -819,18 +834,25 @@ function renderLoginGate() {
 
     authChecking = true;
     loginError = '';
-    loginStatus = isCreate ? '正在创建账号...' : '正在登录...';
-    updateLoginFormState(event.currentTarget, isCreate);
+    loginStatus = isCreate ? '正在创建账号...' : isReset ? '正在重置密码...' : '正在登录...';
+    updateLoginFormState(event.currentTarget, loginMode);
 
     try {
+      const authPath = isCreate
+        ? '/api/workbench-auth/register'
+        : isReset
+          ? '/api/workbench-auth/reset-password'
+          : '/api/workbench-auth/login';
       const payload = await fetchWorkbenchAuthJson(
-        isCreate ? '/api/workbench-auth/register' : '/api/workbench-auth/login',
+        authPath,
         {
           method: 'POST',
           body: JSON.stringify({
             phone,
             password,
+            newPassword: password,
             inviteCode: String(formData.get('inviteCode') || '').trim(),
+            resetCode: String(formData.get('resetCode') || '').trim(),
             captchaToken: String(formData.get('captchaToken') || '').trim(),
             rememberLogin: Boolean(formData.get('rememberLogin')),
           }),
@@ -900,6 +922,30 @@ function renderAccountSession() {
         <button class="secondary-button" type="button" data-settings-logout-workbench>退出登录</button>
       </div>
     </div>
+    <form class="account-session-card account-password-form" data-account-change-password-form>
+      <div>
+        <span>修改密码</span>
+        <strong>需要验证当前密码</strong>
+        <small>修改后旧登录态会失效，当前页面会自动换成新 session。</small>
+      </div>
+      <label>
+        <span>当前密码</span>
+        <input name="currentPassword" type="password" autocomplete="current-password" />
+      </label>
+      <label>
+        <span>新密码</span>
+        <input name="newPassword" type="password" autocomplete="new-password" />
+      </label>
+      <label>
+        <span>确认新密码</span>
+        <input name="confirmPassword" type="password" autocomplete="new-password" />
+      </label>
+      ${accountPasswordError ? `<div class="login-message error">${displayText(accountPasswordError)}</div>` : ''}
+      ${accountPasswordStatus ? `<div class="login-message">${displayText(accountPasswordStatus)}</div>` : ''}
+      <button class="primary-button compact-button" type="submit" ${accountPasswordChecking ? 'disabled' : ''}>
+        ${accountPasswordChecking ? '修改中' : '确认修改密码'}
+      </button>
+    </form>
   `;
 
   accountSessionEl.querySelector('[data-switch-workbench-account]')?.addEventListener('click', () => {
@@ -909,6 +955,52 @@ function renderAccountSession() {
   accountSessionEl.querySelector('[data-settings-logout-workbench]')?.addEventListener('click', () => {
     logoutWorkbench();
   });
+
+  accountSessionEl.querySelector('[data-account-change-password-form]')?.addEventListener('submit', async (event) => {
+    event.preventDefault();
+    const form = event.currentTarget;
+    const formData = new FormData(form);
+    const currentPassword = String(formData.get('currentPassword') || '');
+    const newPassword = String(formData.get('newPassword') || '');
+    const confirmPassword = String(formData.get('confirmPassword') || '');
+
+    if (!currentPassword || newPassword.length < 8) {
+      accountPasswordError = '请输入当前密码，并设置至少 8 位的新密码。';
+      accountPasswordStatus = '';
+      renderAccountSession();
+      return;
+    }
+    if (newPassword !== confirmPassword) {
+      accountPasswordError = '两次输入的新密码不一致。';
+      accountPasswordStatus = '';
+      renderAccountSession();
+      return;
+    }
+
+    accountPasswordChecking = true;
+    accountPasswordError = '';
+    accountPasswordStatus = '正在修改密码...';
+    renderAccountSession();
+
+    try {
+      const payload = await fetchWorkbenchAuthJson('/api/workbench-auth/change-password', {
+        method: 'POST',
+        body: JSON.stringify({
+          currentPassword,
+          newPassword,
+        }),
+      });
+      setWorkbenchUser(payload.user || currentWorkbenchUser || {});
+      accountPasswordStatus = payload.message || '密码已修改。';
+      accountPasswordError = '';
+    } catch (error) {
+      accountPasswordError = error.message;
+      accountPasswordStatus = '';
+    } finally {
+      accountPasswordChecking = false;
+      renderAccountSession();
+    }
+  });
 }
 
 async function logoutWorkbench() {
@@ -917,6 +1009,9 @@ async function logoutWorkbench() {
     credentials: 'include',
   }).catch(() => {});
   clearWorkbenchUser();
+  loginMode = 'login';
+  loginStatus = '';
+  loginError = '';
   settingsOpen = false;
   emailRuleControlOpen = false;
   overviewOpen = true;

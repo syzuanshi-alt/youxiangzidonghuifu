@@ -4344,6 +4344,37 @@ textarea::placeholder {
   gap: 8px;
 }
 
+.account-password-form {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  align-items: start;
+  margin-top: 12px;
+}
+
+.account-password-form > div,
+.account-password-form .login-message {
+  grid-column: 1 / -1;
+}
+
+.account-password-form label {
+  display: grid;
+  gap: 6px;
+  min-width: 0;
+}
+
+.account-password-form input {
+  width: 100%;
+  min-width: 0;
+  border: 1px solid #244a72;
+  border-radius: 8px;
+  padding: 10px 12px;
+  background: #07182b;
+  color: #eaf4ff;
+}
+
+.account-password-form button {
+  justify-self: start;
+}
+
 .settings-dock-button {
   display: grid;
 }
