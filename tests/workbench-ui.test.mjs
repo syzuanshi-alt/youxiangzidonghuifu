@@ -129,6 +129,16 @@ const fixtureMails = [
   },
 ];
 
+const fixtureNewHighRiskMail = {
+  id: 'MAIL-NEW-HIGH',
+  messageId: 'MSG-NEW-HIGH',
+  subject: '新邮件：客户要求退款',
+  sender: 'new-high-risk@example.test',
+  receivedAt: '2026-06-30 10:00',
+  summary: '新收到客户退款请求。',
+  bodyText: '我需要取消这个订单并退款，请尽快处理。',
+};
+
 const writeStatus = {
   writeEnabled: true,
   sendEnabled: true,
@@ -183,6 +193,11 @@ async function installApiRoutes(page, capturedActions, options = {}) {
     phone: '',
     password: 'StrongPass123',
     session: '',
+  };
+  const mailState = options.mailState || {
+    mails: fixtureMails,
+    failMessages: false,
+    onMessagesRequest: null,
   };
 
   await page.route('**/api/**', async (route) => {
@@ -306,9 +321,9 @@ async function installApiRoutes(page, capturedActions, options = {}) {
           ok: true,
           configured: true,
           messagesLoaded: true,
-          fetchedCount: fixtureMails.length,
+          fetchedCount: mailState.mails.length,
           sourceStatus: '真实接入',
-          statusText: `已接入 · ${fixtureMails.length} 封`,
+          statusText: `已接入 · ${mailState.mails.length} 封`,
           note: 'UI 测试拦截的飞书状态。',
           write: writeStatus,
         }),
@@ -317,6 +332,25 @@ async function installApiRoutes(page, capturedActions, options = {}) {
     }
 
     if (path === '/api/feishu/mail/messages') {
+      mailState.requestCount = (mailState.requestCount || 0) + 1;
+      mailState.onMessagesRequest?.({
+        fail: mailState.failMessages === true,
+        mails: mailState.mails,
+        requestCount: mailState.requestCount,
+      });
+      if (mailState.failMessages === true) {
+        await route.fulfill({
+          status: 503,
+          contentType: 'application/json',
+          body: JSON.stringify({
+            ok: false,
+            message: '模拟飞书读取失败。',
+            sourceStatus: '真实接入',
+          }),
+        });
+        return;
+      }
+
       await route.fulfill({
         contentType: 'application/json',
         body: JSON.stringify({
@@ -326,7 +360,7 @@ async function installApiRoutes(page, capturedActions, options = {}) {
           cacheStatus: 'fresh',
           sourceStatus: '真实接入',
           messages: [],
-          mails: fixtureMails,
+          mails: mailState.mails,
         }),
       });
       return;
@@ -544,13 +578,29 @@ const capturedActions = [];
 const consoleErrors = [];
 const pageErrors = [];
 const httpErrors = [];
+const mailState = {
+  mails: [...fixtureMails],
+  failMessages: false,
+  onMessagesRequest: null,
+  requestCount: 0,
+};
+
+function waitForNextMailRequest(predicate = () => true) {
+  return new Promise((resolve) => {
+    mailState.onMessagesRequest = (event) => {
+      if (!predicate(event)) return;
+      mailState.onMessagesRequest = null;
+      resolve(event);
+    };
+  });
+}
 
 try {
   const page = await browser.newPage();
   page.on('console', (message) => {
     if (message.type() === 'error') {
       const text = message.text();
-      if (!/Failed to load resource: the server responded with a status of 401/.test(text)) {
+      if (!/Failed to load resource: the server responded with a status of (401|503)/.test(text)) {
         consoleErrors.push(text);
       }
     }
@@ -559,7 +609,9 @@ try {
     pageErrors.push(error.message);
   });
   page.on('response', (response) => {
-    if (response.status() >= 400 && response.status() !== 401) {
+    const url = response.url();
+    const expectedMailReadFailure = response.status() === 503 && url.includes('/api/feishu/mail/messages');
+    if (response.status() >= 400 && response.status() !== 401 && !expectedMailReadFailure) {
       httpErrors.push(`${response.status()} ${response.url()}`);
     }
   });
@@ -588,7 +640,7 @@ try {
     await route.fulfill({ status: 204, body: '' });
   });
 
-  await installApiRoutes(page, capturedActions, { authDelayMs: 250 });
+  await installApiRoutes(page, capturedActions, { authDelayMs: 250, mailState });
   await page.addInitScript(() => {
     localStorage.removeItem('email-auto-reply-workbench-accounts');
     localStorage.removeItem('email-auto-reply-workbench-session');
@@ -601,7 +653,7 @@ try {
     localStorage.removeItem('feishu-mail-rule-reviews');
   });
 
-  await page.goto(server.origin, { waitUntil: 'domcontentloaded' });
+  await page.goto(`${server.origin}/?poll_interval_ms=1000`, { waitUntil: 'domcontentloaded' });
   await waitForText(page, '登录工作台');
   await waitForText(page, '真人验证');
   assert.equal(await page.getByText('本地模拟短信验证码').count(), 0);
@@ -627,6 +679,31 @@ try {
   assert.equal(storedAccounts, null);
   assert.equal(storedSmsCodes, null);
   assert.equal(rememberedPhone, '18800000000');
+
+  await page.reload({ waitUntil: 'domcontentloaded' });
+  await waitForText(page, '数据总览');
+  assert.equal(await page.locator('.login-overlay.open').count(), 0);
+  await waitForText(page, '我要取消订单并退款');
+
+  const failedMailRead = waitForNextMailRequest((event) => event.fail === true);
+  mailState.failMessages = true;
+  await failedMailRead;
+  await page.waitForTimeout(120);
+  assert.equal(
+    await page.locator('body').evaluate((body) => body.innerText.includes('我要取消订单并退款')),
+    true,
+    '邮件接口短暂失败时 should keep the last successful mail list instead of clearing to zero',
+  );
+
+  const newMailRead = waitForNextMailRequest((event) => (
+    event.fail === false
+      && event.mails.some((mail) => mail.id === 'MAIL-NEW-HIGH')
+  ));
+  mailState.failMessages = false;
+  mailState.mails = [fixtureNewHighRiskMail, ...fixtureMails];
+  await newMailRead;
+  await page.locator('.mail-toast.is-high').filter({ hasText: '新邮件：客户要求退款' }).waitFor({ state: 'visible', timeout: 3_000 });
+  await page.locator('.mail-toast.is-high').filter({ hasText: '高风险' }).waitFor({ state: 'visible', timeout: 1_000 });
 
   await page.locator('[data-overview-open-settings]').first().click();
   await page.locator('[data-settings-primary="account-session"]').click();

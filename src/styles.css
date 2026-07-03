@@ -668,6 +668,117 @@ textarea {
   border: 1px solid var(--white-risk-line);
 }
 
+.mail-toast-stack {
+  position: fixed;
+  right: 20px;
+  bottom: 20px;
+  z-index: 80;
+  display: grid;
+  gap: 10px;
+  width: min(360px, calc(100vw - 32px));
+  pointer-events: none;
+}
+
+.mail-toast {
+  position: relative;
+  display: grid;
+  gap: 7px;
+  padding: 14px 42px 14px 16px;
+  border: 1px solid var(--line);
+  border-left: 5px solid var(--blue);
+  border-radius: 8px;
+  background: var(--panel);
+  color: var(--ink);
+  box-shadow: 0 18px 44px rgba(15, 23, 42, 0.2);
+  pointer-events: auto;
+}
+
+.mail-toast span {
+  width: fit-content;
+  padding: 3px 8px;
+  border-radius: 999px;
+  background: var(--blue-bg);
+  color: var(--blue);
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.mail-toast strong {
+  line-height: 1.35;
+  overflow-wrap: anywhere;
+}
+
+.mail-toast small {
+  color: var(--muted);
+  overflow-wrap: anywhere;
+}
+
+.mail-toast-close {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  width: 28px;
+  height: 28px;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: inherit;
+  cursor: pointer;
+}
+
+.mail-toast-close:hover {
+  background: rgba(100, 106, 115, 0.12);
+}
+
+.mail-toast-open {
+  width: fit-content;
+  min-height: 28px;
+  padding: 4px 10px;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: transparent;
+  color: inherit;
+  cursor: pointer;
+  font-weight: 700;
+}
+
+.mail-toast.is-low {
+  border-left-color: var(--green);
+}
+
+.mail-toast.is-low span {
+  background: var(--green-bg);
+  color: var(--green);
+}
+
+.mail-toast.is-medium {
+  border-left-color: var(--amber);
+}
+
+.mail-toast.is-medium span {
+  background: var(--amber-bg);
+  color: var(--amber);
+}
+
+.mail-toast.is-high {
+  border-left-color: var(--red);
+}
+
+.mail-toast.is-high span {
+  background: var(--red-bg);
+  color: var(--red);
+}
+
+.mail-toast.is-spam {
+  border-left-color: var(--white-risk-line);
+}
+
+.mail-toast.is-spam span {
+  background: var(--white-risk-bg);
+  color: var(--white-risk);
+  border: 1px solid var(--white-risk-line);
+}
+
 .detail-card {
   height: 100%;
   min-height: 0;
@@ -6465,6 +6576,28 @@ body::before {
 
 .mail-row.lane-white {
   border-left-color: var(--violet);
+}
+
+.mail-toast {
+  border-color: rgba(36, 104, 184, 0.62);
+  background:
+    linear-gradient(160deg, rgba(7, 24, 48, 0.98), rgba(4, 15, 31, 0.98));
+  color: #d8e8ff;
+  box-shadow: 0 18px 48px rgba(0, 0, 0, 0.34);
+}
+
+.mail-toast small {
+  color: #9db9d9;
+}
+
+.mail-toast-open {
+  border-color: rgba(53, 130, 246, 0.64);
+  color: #cfe3ff;
+}
+
+.mail-toast-close:hover,
+.mail-toast-open:hover {
+  background: rgba(42, 111, 214, 0.18);
 }
 
 .right-panel,

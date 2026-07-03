@@ -2557,6 +2557,7 @@ try {
     assert.equal(registerPayload.user.phone, '18800000000');
     assert.match(registerResponse.headers.get('set-cookie'), /workbench_session=/);
     assert.match(registerResponse.headers.get('set-cookie'), /HttpOnly/i);
+    assert.match(registerResponse.headers.get('set-cookie'), /Max-Age=2592000/);
 
     const meResponse = await fetch(`${baseUrl}/api/workbench-auth/me`, {
       headers: { cookie: registerCookie },
@@ -2601,6 +2602,7 @@ try {
     const loginCookie = cookieHeaderFromResponse(loginResponse);
     assert.equal(loginResponse.status, 200);
     assert.match(loginResponse.headers.get('set-cookie'), /workbench_session=/);
+    assert.match(loginResponse.headers.get('set-cookie'), /Max-Age=28800/);
 
     const unauthenticatedChangePasswordResponse = await fetch(`${baseUrl}/api/workbench-auth/change-password`, {
       method: 'POST',

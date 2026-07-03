@@ -156,7 +156,8 @@ const processingStatusText = {
 };
 
 const FEISHU_WORKBENCH_PAGE_SIZE = 20;
-const FEISHU_WORKBENCH_POLL_INTERVAL_MS = 60_000;
+const FEISHU_WORKBENCH_POLL_INTERVAL_MS = readWorkbenchPollIntervalMs(60_000);
+const MAIL_NOTIFICATION_TTL_MS = 9_000;
 const WORKBENCH_METRIC_ORDER = ['urgent', 'pending', 'completed', 'spam', 'all'];
 const WORKBENCH_REMEMBERED_PHONE_KEY = 'email-auto-reply-workbench-remembered-phone';
 const WORKBENCH_RISK_SNAPSHOTS_KEY = 'feishu-mail-risk-snapshots';
@@ -213,6 +214,21 @@ function apiUrl(path) {
   }
 
   return path;
+}
+
+function readWorkbenchPollIntervalMs(defaultValue) {
+  try {
+    const search = new URLSearchParams(window.location.search);
+    const value = Number(search.get('poll_interval_ms'));
+    const host = window.location.hostname;
+    if (['127.0.0.1', 'localhost'].includes(host) && Number.isFinite(value) && value >= 100) {
+      return Math.min(value, defaultValue);
+    }
+  } catch {
+    return defaultValue;
+  }
+
+  return defaultValue;
 }
 
 async function processMailWithEmailAI(mail) {
@@ -366,6 +382,9 @@ let emailRuleMountedTab = '';
 let isLoadingFeishuApiMessages = false;
 let mailSoundBaselineReady = false;
 let knownMailSoundIds = new Set();
+let mailNotificationBaselineReady = false;
+let knownMailNotificationIds = new Set();
+let mailNotifications = [];
 let workbenchAudioContext = null;
 const alertedHighRiskIds = new Set();
 
@@ -398,6 +417,7 @@ const settingsPanelEl = document.querySelector('[data-settings-panel]');
 const settingsBackdropEl = document.querySelector('[data-settings-backdrop]');
 const settingsPrimaryNavEl = document.querySelector('[data-settings-primary-nav]');
 const settingsEmptyEl = document.querySelector('[data-settings-empty]');
+const mailToastStackEl = document.querySelector('[data-mail-toast-stack]');
 
 const defaultApiState = {
   apiProxyAvailable: false,
@@ -795,7 +815,7 @@ function renderLoginGate() {
       </label>
 
       <label class="inline-check login-check">
-        <input name="rememberLogin" type="checkbox" />
+        <input name="rememberLogin" type="checkbox" checked />
         <span>保持登录状态</span>
       </label>
 
@@ -1550,6 +1570,82 @@ function updateMailSoundBaseline(nextMails = []) {
   knownMailSoundIds = new Set(nextMails.map(mailSoundId).filter(Boolean));
   mailSoundBaselineReady = true;
   playSoundEffects(effects);
+}
+
+function dismissMailNotification(notificationId) {
+  mailNotifications = mailNotifications.filter((item) => item.notificationId !== notificationId);
+  renderMailNotifications();
+}
+
+function renderMailNotifications() {
+  if (!mailToastStackEl) return;
+
+  mailToastStackEl.innerHTML = mailNotifications.map((notification) => `
+    <article class="mail-toast is-${escapeHtml(notification.risk)}" data-mail-toast-id="${escapeHtml(notification.notificationId)}">
+      <button class="mail-toast-close" type="button" data-dismiss-mail-toast="${escapeHtml(notification.notificationId)}" aria-label="关闭提醒">×</button>
+      <span>${displayText(notification.riskLabel)}</span>
+      <strong>${displayText(notification.subject, '(无标题)')}</strong>
+      <small>${displayText(notification.sender, '未知发件人')}</small>
+      <button class="mail-toast-open" type="button" data-open-mail-toast="${escapeHtml(notification.mailId)}">打开邮件</button>
+    </article>
+  `).join('');
+
+  mailToastStackEl.querySelectorAll('[data-dismiss-mail-toast]').forEach((button) => {
+    button.addEventListener('click', () => {
+      dismissMailNotification(button.dataset.dismissMailToast || '');
+    });
+  });
+
+  mailToastStackEl.querySelectorAll('[data-open-mail-toast]').forEach((button) => {
+    button.addEventListener('click', () => {
+      const mailId = button.dataset.openMailToast || '';
+      if (mails.some((mail) => mail.id === mailId)) {
+        selectedId = mailId;
+        activeFilter = 'all';
+        overviewOpen = false;
+        mailboxOpenSections.inbox = true;
+        dismissMailNotification(mailNotifications.find((item) => item.mailId === mailId)?.notificationId || '');
+        render();
+      }
+    });
+  });
+}
+
+function queueMailNotifications(newMails = []) {
+  const notifications = newMails.slice(0, 5).map((mail, index) => {
+    const riskState = getMailRiskState(mail);
+    return {
+      notificationId: `${Date.now()}-${index}-${mailSoundId(mail)}`,
+      mailId: mail.id,
+      risk: riskState.risk,
+      riskLabel: riskState.label || riskText[riskState.risk] || '新邮件',
+      subject: mail.subject || '(无标题)',
+      sender: mail.sender || '未知发件人',
+    };
+  });
+
+  if (!notifications.length) return;
+  mailNotifications = [...notifications, ...mailNotifications].slice(0, 5);
+  renderMailNotifications();
+  notifications.forEach((notification) => {
+    window.setTimeout(() => dismissMailNotification(notification.notificationId), MAIL_NOTIFICATION_TTL_MS);
+  });
+}
+
+function updateMailNotificationBaseline(nextMails = []) {
+  const currentIds = new Set(nextMails.map(mailSoundId).filter(Boolean));
+  if (!mailNotificationBaselineReady) {
+    knownMailNotificationIds = currentIds;
+    mailNotificationBaselineReady = true;
+    return;
+  }
+
+  const newMails = nextMails.filter((mail) => {
+    const id = mailSoundId(mail);
+    return id && !knownMailNotificationIds.has(id);
+  });
+  knownMailNotificationIds = currentIds;
+  queueMailNotifications(newMails);
 }
 
 function currentReplyContent(mail) {
@@ -3840,6 +3936,7 @@ function render() {
   renderMailboxNavigation(results);
   renderList(results);
   renderDetail(visibleResults);
+  renderMailNotifications();
 }
 
 async function loadEmailAIStatus() {
@@ -3879,6 +3976,34 @@ async function loadEmailAIStatus() {
   renderEmailAISettingsStatus();
 }
 
+function preserveLastSuccessfulMailsAfterReadFailure({
+  statusText = '飞书 API 读取失败',
+  note = '读取飞书邮件失败。',
+  sourceStatus = '',
+} = {}) {
+  const retainedCount = mails.length;
+  apiState = {
+    ...apiState,
+    messagesLoaded: retainedCount > 0,
+    fetchedCount: retainedCount,
+    sourceStatus: sourceStatus || apiState.sourceStatus || defaultApiState.sourceStatus,
+    statusText: retainedCount
+      ? `${statusText} · 已保留 ${retainedCount} 封`
+      : statusText,
+    note: retainedCount
+      ? `${note} 已保留上次成功读取的邮件，避免工作台误清零。`
+      : `${note} 当前列表为空。`,
+    write: apiState.write || defaultApiState.write,
+  };
+
+  if (!retainedCount) {
+    feishuMessages = [];
+    selectedId = '';
+  }
+
+  render();
+}
+
 async function loadFeishuApiMessages({ preserveSelection = false } = {}) {
   if (isLoadingFeishuApiMessages) return;
   isLoadingFeishuApiMessages = true;
@@ -3913,17 +4038,11 @@ async function loadFeishuApiMessages({ preserveSelection = false } = {}) {
     const messagesPayload = await messagesResponse.json();
 
     if (!messagesResponse.ok || !messagesPayload.ok) {
-      apiState = {
-        ...apiState,
-        messagesLoaded: false,
+      preserveLastSuccessfulMailsAfterReadFailure({
         statusText: '飞书 API 读取失败',
-        note: messagesPayload.message || '读取飞书邮件失败；当前列表为空。',
+        note: messagesPayload.message || '读取飞书邮件失败。',
         sourceStatus: messagesPayload.sourceStatus || 'API 待接入',
-      };
-      feishuMessages = [];
-      mails = [];
-      selectedId = '';
-      render();
+      });
       return;
     }
 
@@ -3932,7 +4051,9 @@ async function loadFeishuApiMessages({ preserveSelection = false } = {}) {
       ? messagesPayload.mails
       : [];
     mails = await processMailsWithEmailAI(rawMails);
-    updateMailSoundBaseline(mails);
+    const classifiedForArrivalSignals = classifiedMails();
+    updateMailSoundBaseline(classifiedForArrivalSignals);
+    updateMailNotificationBaseline(classifiedForArrivalSignals);
     selectedId = preserveSelection && mails.some((mail) => mail.id === selectedId)
       ? selectedId
       : mails[0]?.id || '';
@@ -3952,15 +4073,20 @@ async function loadFeishuApiMessages({ preserveSelection = false } = {}) {
     };
     render();
   } catch (error) {
-    apiState = {
-      ...defaultApiState,
+    const retainedCount = mails.length;
+    apiState = retainedCount
+      ? {
+        ...apiState,
+        apiProxyAvailable: apiState.apiProxyAvailable,
+      }
+      : {
+        ...defaultApiState,
+      };
+    preserveLastSuccessfulMailsAfterReadFailure({
       statusText: '飞书 API 代理未连接',
-      note: `${error.message} 当前列表为空。`,
-    };
-    feishuMessages = [];
-    mails = [];
-    selectedId = '';
-    render();
+      note: error.message,
+      sourceStatus: apiState.sourceStatus,
+    });
   } finally {
     isLoadingFeishuApiMessages = false;
   }
