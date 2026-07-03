@@ -1978,6 +1978,8 @@ textarea {
 
 .login-card {
   width: min(460px, 100%);
+  max-height: calc(100vh - 40px);
+  overflow: auto;
   display: grid;
   gap: 16px;
   padding: 24px;
@@ -2062,6 +2064,34 @@ textarea {
   display: grid;
   grid-template-columns: minmax(0, 1fr) auto;
   gap: 8px;
+}
+
+.login-human-check {
+  display: grid;
+  gap: 8px;
+  padding: 12px;
+  border: 1px solid #c9d8f6;
+  border-radius: 8px;
+  background: #f6f9ff;
+}
+
+.login-human-check strong {
+  color: var(--ink);
+  font-size: 13px;
+}
+
+.login-human-check span {
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.45;
+}
+
+.turnstile-widget {
+  min-height: 32px;
+}
+
+.login-check {
+  align-items: center;
 }
 
 .login-message {

@@ -5,6 +5,11 @@ import { dirname, extname, join, normalize, resolve, sep } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 import { loadLocalEnv } from './envLoader.mjs';
+import { createWorkbenchAuthStore } from './workbenchAuthStore.mjs';
+import {
+  buildWorkbenchCaptchaConfig,
+  verifyWorkbenchCaptcha,
+} from './workbenchCaptcha.mjs';
 import { buildClosedLoopBatch } from '../src/closedLoopWorkflow.js';
 import {
   buildSendContextFromFeishuMessages,
@@ -97,13 +102,14 @@ function toFilePath(rootDir, pathname) {
   return filePath;
 }
 
-function sendJson(response, statusCode, payload) {
+function sendJson(response, statusCode, payload, extraHeaders = {}) {
   response.writeHead(statusCode, {
     'content-type': 'application/json; charset=utf-8',
     'cache-control': 'no-store',
     'access-control-allow-origin': '*',
     'access-control-allow-methods': 'GET,POST,PATCH,OPTIONS',
     'access-control-allow-headers': 'content-type,authorization',
+    ...extraHeaders,
   });
   response.end(JSON.stringify(payload, null, 2));
 }
@@ -117,9 +123,19 @@ function sendHtml(response, statusCode, html) {
   response.end(html);
 }
 
-function sendOptions(response) {
+function requestCorsHeaders(request) {
+  const origin = request?.headers?.origin || '';
+  if (!origin) return { 'access-control-allow-origin': '*' };
+  return {
+    'access-control-allow-origin': origin,
+    'access-control-allow-credentials': 'true',
+    vary: 'origin',
+  };
+}
+
+function sendOptions(response, request) {
   response.writeHead(204, {
-    'access-control-allow-origin': '*',
+    ...requestCorsHeaders(request),
     'access-control-allow-methods': 'GET,POST,PATCH,OPTIONS',
     'access-control-allow-headers': 'content-type,authorization',
     'access-control-max-age': '600',
@@ -543,6 +559,88 @@ async function readJsonBody(request) {
     error.mode = 'validation_failed';
     throw error;
   }
+}
+
+const WORKBENCH_SESSION_COOKIE = 'workbench_session';
+
+function parseCookieHeader(header = '') {
+  return String(header || '')
+    .split(';')
+    .map((part) => part.trim())
+    .filter(Boolean)
+    .reduce((cookies, part) => {
+      const separatorIndex = part.indexOf('=');
+      if (separatorIndex <= 0) return cookies;
+      const key = part.slice(0, separatorIndex).trim();
+      const value = part.slice(separatorIndex + 1).trim();
+      cookies[key] = decodeURIComponent(value);
+      return cookies;
+    }, {});
+}
+
+function requestHost(request) {
+  return String(request.headers.host || '').split(':')[0].toLowerCase();
+}
+
+function isLocalRequest(request) {
+  return ['127.0.0.1', 'localhost', '::1'].includes(requestHost(request));
+}
+
+function isSecureCookieRequest(request) {
+  const forwardedProto = String(request.headers['x-forwarded-proto'] || '').toLowerCase();
+  return forwardedProto === 'https' || !isLocalRequest(request);
+}
+
+function buildWorkbenchSessionCookie(request, token, { maxAgeSeconds = 0 } = {}) {
+  const parts = [
+    `${WORKBENCH_SESSION_COOKIE}=${encodeURIComponent(token)}`,
+    'Path=/',
+    'HttpOnly',
+    'SameSite=Lax',
+  ];
+  if (maxAgeSeconds) parts.push(`Max-Age=${maxAgeSeconds}`);
+  if (isSecureCookieRequest(request)) parts.push('Secure');
+  return parts.join('; ');
+}
+
+function buildClearWorkbenchSessionCookie(request) {
+  const parts = [
+    `${WORKBENCH_SESSION_COOKIE}=`,
+    'Path=/',
+    'HttpOnly',
+    'SameSite=Lax',
+    'Max-Age=0',
+  ];
+  if (isSecureCookieRequest(request)) parts.push('Secure');
+  return parts.join('; ');
+}
+
+function normalizeWorkbenchPhone(value = '') {
+  return String(value || '').trim().replace(/[^\d+]/g, '');
+}
+
+function isValidWorkbenchPhone(value = '') {
+  return /^\+?\d{6,20}$/.test(normalizeWorkbenchPhone(value));
+}
+
+function unauthorizedWorkbenchPayload(message = '请先登录工作台。') {
+  return {
+    ok: false,
+    error: 'workbench_auth_required',
+    message,
+  };
+}
+
+function shouldRequireWorkbenchAuth(env = {}) {
+  const runningOnRailway = Boolean(env.RAILWAY_PUBLIC_DOMAIN || env.RAILWAY_ENVIRONMENT || env.RAILWAY_SERVICE_ID);
+  return readBooleanEnv(env.WORKBENCH_AUTH_REQUIRED, runningOnRailway);
+}
+
+function isProtectedWorkbenchApiPath(pathname = '') {
+  return pathname === '/oauth/start'
+    || pathname === '/api/email-ai/process'
+    || pathname === '/api/feishu/config/update'
+    || pathname.startsWith('/api/feishu/mail');
 }
 
 function sanitizeWriteResult(payload) {
@@ -1754,6 +1852,11 @@ export function createFeishuApiServer({
     rootDir: resolvedDataRoot,
     env,
   });
+  const workbenchAuthStore = createWorkbenchAuthStore({
+    rootDir: resolvedDataRoot,
+    sessionTtlMs: readPositiveIntEnv(env.WORKBENCH_SESSION_TTL_HOURS, 8) * 60 * 60 * 1000,
+    rememberTtlMs: readPositiveIntEnv(env.WORKBENCH_REMEMBER_TTL_DAYS, 30) * 24 * 60 * 60 * 1000,
+  });
   const mailReadCache = new Map();
   const mailReadCacheTtlMs = Number(env.FEISHU_MAIL_READ_CACHE_TTL_MS || DEFAULT_MAIL_READ_CACHE_TTL_MS);
   const mailSyncEnabled = readBooleanEnv(env.FEISHU_MAIL_AUTO_SYNC_ENABLED, false);
@@ -1798,6 +1901,190 @@ export function createFeishuApiServer({
   let mailSyncPromise = null;
   let autoProcessTimer = null;
   let autoProcessPromise = null;
+
+  function workbenchSessionMaxAgeSeconds(rememberLogin = false) {
+    const defaultValue = rememberLogin ? 30 * 24 * 60 * 60 : 8 * 60 * 60;
+    const envValue = rememberLogin
+      ? readPositiveIntEnv(env.WORKBENCH_REMEMBER_TTL_DAYS, 30) * 24 * 60 * 60
+      : readPositiveIntEnv(env.WORKBENCH_SESSION_TTL_HOURS, 8) * 60 * 60;
+    return envValue || defaultValue;
+  }
+
+  async function findWorkbenchSession(request) {
+    if (!shouldRequireWorkbenchAuth(env)) return null;
+    const cookies = parseCookieHeader(request.headers.cookie || '');
+    return workbenchAuthStore.findSession(cookies[WORKBENCH_SESSION_COOKIE] || '');
+  }
+
+  async function requireWorkbenchSession(request, response) {
+    if (!shouldRequireWorkbenchAuth(env)) return true;
+    const session = await findWorkbenchSession(request);
+    if (session) return true;
+
+    sendJson(response, 401, unauthorizedWorkbenchPayload(), requestCorsHeaders(request));
+    return false;
+  }
+
+  async function verifyWorkbenchHuman(request, body = {}) {
+    const verification = await verifyWorkbenchCaptcha({
+      env,
+      token: body.captchaToken || body.captcha_token || '',
+      fetchImpl,
+      remoteIp: String(request.headers['x-forwarded-for'] || '').split(',')[0].trim(),
+    });
+    if (verification.ok) return null;
+    return {
+      statusCode: 400,
+      payload: {
+        ok: false,
+        error: verification.error,
+        message: verification.message || '请先完成人机真人验证。',
+      },
+    };
+  }
+
+  function sendWorkbenchSession(response, request, statusCode, payload, session, rememberLogin = false) {
+    const maxAgeSeconds = workbenchSessionMaxAgeSeconds(rememberLogin);
+    sendJson(response, statusCode, payload, {
+      ...requestCorsHeaders(request),
+      'set-cookie': buildWorkbenchSessionCookie(request, session.token, { maxAgeSeconds }),
+    });
+  }
+
+  function sendWorkbenchAuthJson(response, request, statusCode, payload, headers = {}) {
+    sendJson(response, statusCode, payload, {
+      ...requestCorsHeaders(request),
+      ...headers,
+    });
+  }
+
+  async function handleWorkbenchRegister(request, response) {
+    const body = await readJsonBody(request);
+    const captchaError = await verifyWorkbenchHuman(request, body);
+    if (captchaError) {
+      sendWorkbenchAuthJson(response, request, captchaError.statusCode, captchaError.payload);
+      return;
+    }
+
+    const phone = normalizeWorkbenchPhone(body.phone);
+    const password = String(body.password || '');
+    if (!isValidWorkbenchPhone(phone)) {
+      sendWorkbenchAuthJson(response, request, 400, {
+        ok: false,
+        error: 'workbench_phone_invalid',
+        message: '请输入有效手机号。',
+      });
+      return;
+    }
+    if (password.length < 8) {
+      sendWorkbenchAuthJson(response, request, 400, {
+        ok: false,
+        error: 'workbench_password_too_short',
+        message: '密码至少需要 8 位。',
+      });
+      return;
+    }
+
+    const inviteCode = String(env.WORKBENCH_SIGNUP_INVITE_CODE || '').trim();
+    const submittedInviteCode = String(body.inviteCode || body.invite_code || '').trim();
+    const userCount = await workbenchAuthStore.countUsers();
+    if (inviteCode && submittedInviteCode !== inviteCode) {
+      sendWorkbenchAuthJson(response, request, 403, {
+        ok: false,
+        error: 'workbench_invite_code_invalid',
+        message: '开户注册码不正确。',
+      });
+      return;
+    }
+    if (!inviteCode && userCount > 0) {
+      sendWorkbenchAuthJson(response, request, 403, {
+        ok: false,
+        error: 'workbench_signup_closed',
+        message: '账号创建已关闭，请联系管理员开户注册码。',
+      });
+      return;
+    }
+
+    try {
+      const created = await workbenchAuthStore.createUser({ phone, password });
+      const rememberLogin = body.rememberLogin === true || body.remember_login === true;
+      const session = await workbenchAuthStore.createSession({ phone, rememberLogin });
+      sendWorkbenchSession(response, request, 201, {
+        ok: true,
+        user: created.user,
+        message: '账号已创建并登录。',
+      }, session, rememberLogin);
+    } catch (error) {
+      sendWorkbenchAuthJson(response, request, 409, {
+        ok: false,
+        error: 'workbench_account_conflict',
+        message: error.message || '账号创建失败。',
+      });
+    }
+  }
+
+  async function handleWorkbenchLogin(request, response) {
+    const body = await readJsonBody(request);
+    const captchaError = await verifyWorkbenchHuman(request, body);
+    if (captchaError) {
+      sendWorkbenchAuthJson(response, request, captchaError.statusCode, captchaError.payload);
+      return;
+    }
+
+    const phone = normalizeWorkbenchPhone(body.phone);
+    const password = String(body.password || '');
+    if (!isValidWorkbenchPhone(phone) || !password) {
+      sendWorkbenchAuthJson(response, request, 400, {
+        ok: false,
+        error: 'workbench_login_invalid',
+        message: '请输入手机号和密码。',
+      });
+      return;
+    }
+
+    const verified = await workbenchAuthStore.verifyPassword(phone, password);
+    if (!verified) {
+      sendWorkbenchAuthJson(response, request, 401, {
+        ok: false,
+        error: 'workbench_login_failed',
+        message: '手机号或密码不正确。',
+      });
+      return;
+    }
+
+    const rememberLogin = body.rememberLogin === true || body.remember_login === true;
+    const session = await workbenchAuthStore.createSession({ phone, rememberLogin });
+    sendWorkbenchSession(response, request, 200, {
+      ok: true,
+      user: session.user,
+      message: '登录成功。',
+    }, session, rememberLogin);
+  }
+
+  async function handleWorkbenchLogout(request, response) {
+    const cookies = parseCookieHeader(request.headers.cookie || '');
+    await workbenchAuthStore.deleteSession(cookies[WORKBENCH_SESSION_COOKIE] || '');
+    sendWorkbenchAuthJson(response, request, 200, {
+      ok: true,
+      message: '已退出登录。',
+    }, {
+      'set-cookie': buildClearWorkbenchSessionCookie(request),
+    });
+  }
+
+  async function handleWorkbenchMe(request, response) {
+    const session = await findWorkbenchSession(request);
+    if (!session) {
+      sendWorkbenchAuthJson(response, request, 401, unauthorizedWorkbenchPayload());
+      return;
+    }
+
+    sendWorkbenchAuthJson(response, request, 200, {
+      ok: true,
+      user: session.user,
+      expiresAt: session.expiresAt,
+    });
+  }
 
   async function attachProcessingStatusToMailPayload(payload = {}) {
     const statusMap = await loadMailProcessingStatusMap(resolvedDataRoot);
@@ -1948,7 +2235,7 @@ export function createFeishuApiServer({
 
     try {
       if (request.method === 'OPTIONS') {
-        sendOptions(response);
+        sendOptions(response, request);
         return;
       }
 
@@ -1966,6 +2253,59 @@ export function createFeishuApiServer({
       }
 
       await ensureDataRootReady();
+
+      if (requestUrl.pathname === '/api/workbench-auth/captcha/config') {
+        if (request.method !== 'GET') {
+          sendMethodNotAllowed(response);
+          return;
+        }
+        sendJson(response, 200, {
+          ok: true,
+          ...buildWorkbenchCaptchaConfig(env),
+        }, requestCorsHeaders(request));
+        return;
+      }
+
+      if (requestUrl.pathname === '/api/workbench-auth/register') {
+        if (request.method !== 'POST') {
+          sendMethodNotAllowed(response);
+          return;
+        }
+        await handleWorkbenchRegister(request, response);
+        return;
+      }
+
+      if (requestUrl.pathname === '/api/workbench-auth/login') {
+        if (request.method !== 'POST') {
+          sendMethodNotAllowed(response);
+          return;
+        }
+        await handleWorkbenchLogin(request, response);
+        return;
+      }
+
+      if (requestUrl.pathname === '/api/workbench-auth/logout') {
+        if (request.method !== 'POST') {
+          sendMethodNotAllowed(response);
+          return;
+        }
+        await handleWorkbenchLogout(request, response);
+        return;
+      }
+
+      if (requestUrl.pathname === '/api/workbench-auth/me') {
+        if (request.method !== 'GET') {
+          sendMethodNotAllowed(response);
+          return;
+        }
+        await handleWorkbenchMe(request, response);
+        return;
+      }
+
+      if (shouldRequireWorkbenchAuth(env) && isProtectedWorkbenchApiPath(requestUrl.pathname)) {
+        const allowed = await requireWorkbenchSession(request, response);
+        if (!allowed) return;
+      }
 
       if (requestUrl.pathname === '/oauth/start') {
         if (request.method !== 'GET') {

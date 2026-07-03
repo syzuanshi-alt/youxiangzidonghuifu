@@ -179,10 +179,85 @@ function startStaticServer() {
 }
 
 async function installApiRoutes(page, capturedActions) {
+  const authState = {
+    phone: '',
+    session: '',
+  };
+
   await page.route('**/api/**', async (route) => {
     const request = route.request();
     const url = new URL(request.url());
     const path = url.pathname;
+
+    if (path === '/api/workbench-auth/captcha/config') {
+      await route.fulfill({
+        contentType: 'application/json',
+        body: JSON.stringify({
+          ok: true,
+          required: true,
+          provider: 'turnstile',
+          siteKey: 'ui-test-site-key',
+        }),
+      });
+      return;
+    }
+
+    if (path === '/api/workbench-auth/me') {
+      if (!authState.session) {
+        await route.fulfill({
+          status: 401,
+          contentType: 'application/json',
+          body: JSON.stringify({ ok: false, message: '请先登录工作台。' }),
+        });
+        return;
+      }
+      await route.fulfill({
+        contentType: 'application/json',
+        body: JSON.stringify({
+          ok: true,
+          user: { phone: authState.phone, createdAt: '2026-07-03T00:00:00.000Z' },
+        }),
+      });
+      return;
+    }
+
+    if (path === '/api/workbench-auth/register' || path === '/api/workbench-auth/login') {
+      const payload = JSON.parse(request.postData() || '{}');
+      if (!payload.captchaToken) {
+        await route.fulfill({
+          status: 400,
+          contentType: 'application/json',
+          body: JSON.stringify({ ok: false, message: '请先完成人机真人验证。' }),
+        });
+        return;
+      }
+      authState.phone = String(payload.phone || '');
+      authState.session = 'ui-test-session';
+      await route.fulfill({
+        status: path.endsWith('/register') ? 201 : 200,
+        contentType: 'application/json',
+        headers: {
+          'set-cookie': 'workbench_session=ui-test-session; Path=/; HttpOnly; SameSite=Lax',
+        },
+        body: JSON.stringify({
+          ok: true,
+          user: { phone: authState.phone, createdAt: '2026-07-03T00:00:00.000Z' },
+        }),
+      });
+      return;
+    }
+
+    if (path === '/api/workbench-auth/logout') {
+      authState.session = '';
+      await route.fulfill({
+        contentType: 'application/json',
+        headers: {
+          'set-cookie': 'workbench_session=; Path=/; HttpOnly; SameSite=Lax; Max-Age=0',
+        },
+        body: JSON.stringify({ ok: true }),
+      });
+      return;
+    }
 
     if (path === '/api/feishu/status') {
       await route.fulfill({
@@ -433,7 +508,10 @@ try {
   const page = await browser.newPage();
   page.on('console', (message) => {
     if (message.type() === 'error') {
-      consoleErrors.push(message.text());
+      const text = message.text();
+      if (!/Failed to load resource: the server responded with a status of 401/.test(text)) {
+        consoleErrors.push(text);
+      }
     }
   });
   page.on('pageerror', (error) => {
@@ -445,18 +523,10 @@ try {
 
   await installApiRoutes(page, capturedActions);
   await page.addInitScript(() => {
-    const phone = '18800000000';
-    localStorage.setItem('email-auto-reply-workbench-accounts', JSON.stringify({
-      [phone]: {
-        phone,
-        password: 'password123',
-        createdAt: new Date().toISOString(),
-      },
-    }));
-    localStorage.setItem('email-auto-reply-workbench-session', JSON.stringify({
-      phone,
-      loginAt: new Date().toISOString(),
-    }));
+    localStorage.removeItem('email-auto-reply-workbench-accounts');
+    localStorage.removeItem('email-auto-reply-workbench-session');
+    localStorage.removeItem('email-auto-reply-workbench-sms-codes');
+    localStorage.removeItem('email-auto-reply-workbench-remembered-phone');
     localStorage.removeItem('feishu-mail-risk-overrides');
     localStorage.removeItem('feishu-mail-manual-archive-selections');
     localStorage.removeItem('feishu-mail-write-action-results');
@@ -465,7 +535,25 @@ try {
   });
 
   await page.goto(server.origin, { waitUntil: 'domcontentloaded' });
+  await waitForText(page, '登录工作台');
+  await waitForText(page, '真人验证');
+  assert.equal(await page.getByText('本地模拟短信验证码').count(), 0);
+  await page.locator('[data-login-mode="create"]').click();
+  await page.locator('input[name="phone"]').fill('18800000000');
+  await page.locator('input[name="password"]').fill('StrongPass123');
+  await page.locator('input[name="inviteCode"]').fill('invite-code');
+  await page.locator('input[name="rememberAccount"]').check();
+  await page.evaluate(() => {
+    document.querySelector('input[name="captchaToken"]').value = 'ui-captcha-token';
+  });
+  await page.locator('[data-workbench-login-form]').locator('button[type="submit"]').click();
   await waitForText(page, '数据总览');
+  const storedAccounts = await page.evaluate(() => localStorage.getItem('email-auto-reply-workbench-accounts'));
+  const storedSmsCodes = await page.evaluate(() => localStorage.getItem('email-auto-reply-workbench-sms-codes'));
+  const rememberedPhone = await page.evaluate(() => localStorage.getItem('email-auto-reply-workbench-remembered-phone'));
+  assert.equal(storedAccounts, null);
+  assert.equal(storedSmsCodes, null);
+  assert.equal(rememberedPhone, '18800000000');
 
   await page.locator('.overview-stat-card.completed').click();
   await waitForText(page, '邮箱');

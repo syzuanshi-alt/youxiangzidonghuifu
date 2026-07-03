@@ -158,11 +158,8 @@ const processingStatusText = {
 const FEISHU_WORKBENCH_PAGE_SIZE = 20;
 const FEISHU_WORKBENCH_POLL_INTERVAL_MS = 60_000;
 const WORKBENCH_METRIC_ORDER = ['urgent', 'pending', 'completed', 'spam', 'all'];
-const WORKBENCH_ACCOUNTS_KEY = 'email-auto-reply-workbench-accounts';
-const WORKBENCH_SESSION_KEY = 'email-auto-reply-workbench-session';
+const WORKBENCH_REMEMBERED_PHONE_KEY = 'email-auto-reply-workbench-remembered-phone';
 const WORKBENCH_RISK_SNAPSHOTS_KEY = 'feishu-mail-risk-snapshots';
-const WORKBENCH_SMS_CODES_KEY = 'email-auto-reply-workbench-sms-codes';
-const WORKBENCH_SMS_CODE_TTL_MS = 10 * 60 * 1000;
 const EMAIL_AI_SYSTEM_TABS = ['models', 'skills', 'versions', 'test'];
 const EMAIL_AI_RULE_TABS = ['risk', 'spam', 'knowledge', 'prompts', 'safety'];
 const EMAIL_AI_RULE_BUTTONS = [
@@ -336,11 +333,17 @@ let mailboxOpenSections = {
 };
 let overviewOpen = true;
 let loginMode = 'login';
-let loginMethod = 'password';
 let loginStatus = '';
 let loginError = '';
-let loginDraftPhone = '';
-let currentWorkbenchUser = loadWorkbenchSession();
+let loginDraftPhone = localStorage.getItem(WORKBENCH_REMEMBERED_PHONE_KEY) || '';
+let captchaConfig = {
+  required: false,
+  provider: 'disabled',
+  siteKey: '',
+};
+let authChecking = true;
+let turnstileScriptLoading = false;
+let currentWorkbenchUser = null;
 let workbenchStarted = false;
 let feishuPollTimer = null;
 let settingsOpen = false;
@@ -580,32 +583,6 @@ function saveKnowledgeItems() {
   localStorage.setItem('feishu-mail-knowledge-items', JSON.stringify(knowledgeItems));
 }
 
-function loadWorkbenchAccounts() {
-  try {
-    const accounts = JSON.parse(localStorage.getItem(WORKBENCH_ACCOUNTS_KEY) || '{}');
-    return accounts && typeof accounts === 'object' ? accounts : {};
-  } catch {
-    return {};
-  }
-}
-
-function saveWorkbenchAccounts(accounts) {
-  localStorage.setItem(WORKBENCH_ACCOUNTS_KEY, JSON.stringify(accounts));
-}
-
-function loadWorkbenchSmsCodes() {
-  try {
-    const codes = JSON.parse(localStorage.getItem(WORKBENCH_SMS_CODES_KEY) || '{}');
-    return codes && typeof codes === 'object' ? codes : {};
-  } catch {
-    return {};
-  }
-}
-
-function saveWorkbenchSmsCodes(codes) {
-  localStorage.setItem(WORKBENCH_SMS_CODES_KEY, JSON.stringify(codes));
-}
-
 function normalizePhone(value = '') {
   return String(value || '').trim().replace(/[^\d+]/g, '');
 }
@@ -620,55 +597,97 @@ function maskPhone(phone = '') {
   return `${normalized.slice(0, 3)}****${normalized.slice(-4)}`;
 }
 
-function loadWorkbenchSession() {
-  try {
-    const session = JSON.parse(localStorage.getItem(WORKBENCH_SESSION_KEY) || 'null');
-    const accounts = loadWorkbenchAccounts();
-    if (!session?.phone || !accounts[session.phone]) return null;
-    return {
-      phone: session.phone,
-      loginAt: session.loginAt || new Date().toISOString(),
-    };
-  } catch {
-    return null;
+function saveRememberedPhone(phone, rememberAccount) {
+  if (rememberAccount) {
+    localStorage.setItem(WORKBENCH_REMEMBERED_PHONE_KEY, normalizePhone(phone));
+  } else {
+    localStorage.removeItem(WORKBENCH_REMEMBERED_PHONE_KEY);
   }
 }
 
-function saveWorkbenchSession(phone) {
-  const session = {
-    phone,
-    loginAt: new Date().toISOString(),
-  };
-  localStorage.setItem(WORKBENCH_SESSION_KEY, JSON.stringify(session));
-  currentWorkbenchUser = session;
-}
-
-function clearWorkbenchSession() {
-  localStorage.removeItem(WORKBENCH_SESSION_KEY);
+function clearWorkbenchUser() {
   currentWorkbenchUser = null;
 }
 
-function createWorkbenchSmsCode(phone) {
-  const code = String(Math.floor(100000 + Math.random() * 900000));
-  const codes = loadWorkbenchSmsCodes();
-  codes[phone] = {
-    code,
-    expiresAt: Date.now() + WORKBENCH_SMS_CODE_TTL_MS,
+function setWorkbenchUser(user = {}) {
+  currentWorkbenchUser = {
+    phone: user.phone || '',
+    loginAt: user.lastLoginAt || user.loginAt || new Date().toISOString(),
   };
-  saveWorkbenchSmsCodes(codes);
-  return code;
 }
 
-function consumeWorkbenchSmsCode(phone, code) {
-  const codes = loadWorkbenchSmsCodes();
-  const record = codes[phone];
-  if (!record || record.expiresAt < Date.now() || String(record.code) !== String(code || '').trim()) {
-    return false;
+async function fetchWorkbenchAuthJson(path, options = {}) {
+  const response = await fetch(apiUrl(path), {
+    ...options,
+    credentials: 'include',
+    headers: {
+      ...(options.body ? { 'content-type': 'application/json' } : {}),
+      ...(options.headers || {}),
+    },
+  });
+  const payload = await readJsonPayload(response, '工作台登录接口请求失败。');
+  if (!response.ok || payload.ok === false) {
+    throw new Error(payload.message || payload.error || '工作台登录失败。');
+  }
+  return payload;
+}
+
+async function loadWorkbenchCaptchaConfig() {
+  try {
+    const payload = await fetchWorkbenchAuthJson('/api/workbench-auth/captcha/config', {
+      cache: 'no-store',
+    });
+    captchaConfig = {
+      required: payload.required === true,
+      provider: payload.provider || 'disabled',
+      siteKey: payload.siteKey || '',
+    };
+  } catch {
+    captchaConfig = {
+      required: false,
+      provider: 'disabled',
+      siteKey: '',
+    };
+  }
+}
+
+function mountWorkbenchCaptcha() {
+  if (!captchaConfig.required || captchaConfig.provider !== 'turnstile' || !captchaConfig.siteKey) return;
+  const widget = loginCardEl?.querySelector('[data-turnstile-widget]');
+  const tokenInput = loginCardEl?.querySelector('input[name="captchaToken"]');
+  if (!widget || !tokenInput || widget.dataset.rendered === 'true') return;
+
+  const renderWidget = () => {
+    if (!window.turnstile || widget.dataset.rendered === 'true') return;
+    widget.dataset.rendered = 'true';
+    window.turnstile.render(widget, {
+      sitekey: captchaConfig.siteKey,
+      callback: (token) => {
+        tokenInput.value = token || '';
+      },
+      'expired-callback': () => {
+        tokenInput.value = '';
+      },
+      'error-callback': () => {
+        tokenInput.value = '';
+      },
+    });
+  };
+
+  if (window.turnstile) {
+    renderWidget();
+    return;
   }
 
-  delete codes[phone];
-  saveWorkbenchSmsCodes(codes);
-  return true;
+  if (!turnstileScriptLoading) {
+    turnstileScriptLoading = true;
+    const script = document.createElement('script');
+    script.src = 'https://challenges.cloudflare.com/turnstile/v0/api.js?render=explicit';
+    script.async = true;
+    script.defer = true;
+    script.onload = renderWidget;
+    document.head.append(script);
+  }
 }
 
 function renderLoginGate() {
@@ -686,13 +705,23 @@ function renderLoginGate() {
   if (loggedIn) return;
 
   const isCreate = loginMode === 'create';
-  const isSms = loginMethod === 'sms';
+  const rememberedPhone = localStorage.getItem(WORKBENCH_REMEMBERED_PHONE_KEY) || '';
+  const captchaBlock = captchaConfig.required
+    ? `
+      <section class="login-human-check" data-workbench-captcha>
+        <strong>真人验证</strong>
+        <span>${captchaConfig.provider === 'turnstile' ? '请完成 Cloudflare Turnstile 验证后继续。' : '请完成真人验证后继续。'}</span>
+        <div class="turnstile-widget" data-turnstile-widget></div>
+        <input name="captchaToken" type="hidden" autocomplete="off" />
+      </section>
+    `
+    : '';
 
   loginCardEl.innerHTML = `
     <div class="login-heading">
       <span>邮件自动回复工作台</span>
       <h1>${isCreate ? '创建工作台账号' : '登录工作台'}</h1>
-      <p>使用手机号登录。密码适合固定电脑，短信验证码适合临时验证。</p>
+      <p>使用手机号和密码登录。密码由浏览器密码管理器保存，工作台不会明文保存。</p>
     </div>
 
     <div class="login-mode-tabs">
@@ -700,38 +729,40 @@ function renderLoginGate() {
       <button type="button" class="${loginMode === 'create' ? 'active' : ''}" data-login-mode="create">创建账号</button>
     </div>
 
-    <div class="login-method-tabs">
-      <button type="button" class="${loginMethod === 'password' ? 'active' : ''}" data-login-method="password">手机号 + 密码</button>
-      <button type="button" class="${loginMethod === 'sms' ? 'active' : ''}" data-login-method="sms">手机号 + 短信验证码</button>
-    </div>
-
     <form class="login-form" data-workbench-login-form>
       <label>
         <span>手机号</span>
-        <input name="phone" inputmode="tel" autocomplete="tel" value="${escapeHtml(loginDraftPhone)}" placeholder="请输入手机号" />
+        <input name="phone" inputmode="tel" autocomplete="username tel" value="${escapeHtml(loginDraftPhone || rememberedPhone)}" placeholder="请输入手机号" />
       </label>
 
-      ${(!isSms || isCreate) ? `
+      <label>
+        <span>密码${isCreate ? '（至少 8 位）' : ''}</span>
+        <input name="password" type="password" autocomplete="${isCreate ? 'new-password' : 'current-password'}" placeholder="${isCreate ? '设置登录密码' : '请输入密码'}" />
+      </label>
+
+      ${isCreate ? `
         <label>
-          <span>密码${isCreate ? '（至少 6 位）' : ''}</span>
-          <input name="password" type="password" autocomplete="${isCreate ? 'new-password' : 'current-password'}" placeholder="${isCreate ? '设置登录密码' : '请输入密码'}" />
+          <span>开户注册码</span>
+          <input name="inviteCode" autocomplete="off" placeholder="请输入管理员提供的邀请码" />
         </label>
       ` : ''}
 
-      ${(isSms || isCreate) ? `
-        <label>
-          <span>短信验证码</span>
-          <div class="login-code-row">
-            <input name="smsCode" inputmode="numeric" autocomplete="one-time-code" placeholder="6 位验证码" />
-            <button class="secondary-button" type="button" data-send-login-code>获取验证码</button>
-          </div>
-        </label>
-      ` : ''}
+      ${captchaBlock}
+
+      <label class="inline-check login-check">
+        <input name="rememberAccount" type="checkbox" ${rememberedPhone ? 'checked' : ''} />
+        <span>记住账号</span>
+      </label>
+
+      <label class="inline-check login-check">
+        <input name="rememberLogin" type="checkbox" />
+        <span>保持登录状态</span>
+      </label>
 
       ${loginError ? `<div class="login-message error">${displayText(loginError)}</div>` : ''}
       ${loginStatus ? `<div class="login-message">${displayText(loginStatus)}</div>` : ''}
 
-      <button class="primary-button login-submit" type="submit">${isCreate ? '创建并进入工作台' : '登录工作台'}</button>
+      <button class="primary-button login-submit" type="submit">${authChecking ? '验证中' : isCreate ? '创建并进入工作台' : '登录工作台'}</button>
     </form>
   `;
 
@@ -744,54 +775,12 @@ function renderLoginGate() {
     });
   });
 
-  loginCardEl.querySelectorAll('[data-login-method]').forEach((button) => {
-    button.addEventListener('click', () => {
-      loginMethod = button.dataset.loginMethod;
-      loginStatus = '';
-      loginError = '';
-      renderLoginGate();
-    });
-  });
-
-  loginCardEl.querySelector('[data-send-login-code]')?.addEventListener('click', () => {
-    const phone = normalizePhone(loginCardEl.querySelector('input[name="phone"]')?.value || '');
-    loginDraftPhone = phone;
-    const accounts = loadWorkbenchAccounts();
-
-    if (!isValidPhone(phone)) {
-      loginError = '请输入有效手机号。';
-      loginStatus = '';
-      renderLoginGate();
-      return;
-    }
-
-    if (loginMode === 'login' && !accounts[phone]) {
-      loginError = '这个手机号还没有创建账号，请先创建账号。';
-      loginStatus = '';
-      renderLoginGate();
-      return;
-    }
-
-    if (loginMode === 'create' && accounts[phone]) {
-      loginError = '这个手机号已创建账号，可以直接登录。';
-      loginStatus = '';
-      renderLoginGate();
-      return;
-    }
-
-    const code = createWorkbenchSmsCode(phone);
-    loginError = '';
-    loginStatus = `本地模拟短信验证码：${code}，10 分钟内有效。`;
-    renderLoginGate();
-  });
-
-  loginCardEl.querySelector('[data-workbench-login-form]')?.addEventListener('submit', (event) => {
+  loginCardEl.querySelector('[data-workbench-login-form]')?.addEventListener('submit', async (event) => {
     event.preventDefault();
     const formData = new FormData(event.currentTarget);
     const phone = normalizePhone(formData.get('phone'));
     const password = String(formData.get('password') || '');
-    const smsCode = String(formData.get('smsCode') || '');
-    const accounts = loadWorkbenchAccounts();
+    const rememberAccount = Boolean(formData.get('rememberAccount'));
     loginDraftPhone = phone;
 
     if (!isValidPhone(phone)) {
@@ -801,57 +790,72 @@ function renderLoginGate() {
       return;
     }
 
-    if (loginMode === 'create') {
-      if (accounts[phone]) {
-        loginError = '这个手机号已创建账号，可以直接登录。';
-      } else if (password.length < 6) {
-        loginError = '密码至少需要 6 位。';
-      } else if (!consumeWorkbenchSmsCode(phone, smsCode)) {
-        loginError = '短信验证码不正确或已过期。';
-      } else {
-        accounts[phone] = {
-          phone,
-          password,
-          createdAt: new Date().toISOString(),
-        };
-        saveWorkbenchAccounts(accounts);
-        saveWorkbenchSession(phone);
-        loginStatus = '';
-        loginError = '';
-        renderLoginGate();
-        startWorkbench();
-        return;
-      }
+    if (password.length < (isCreate ? 8 : 1)) {
+      loginError = isCreate ? '密码至少需要 8 位。' : '请输入密码。';
       loginStatus = '';
       renderLoginGate();
       return;
     }
 
-    const account = accounts[phone];
-    if (!account) {
-      loginError = '这个手机号还没有创建账号，请先创建账号。';
+    authChecking = true;
+    loginError = '';
+    loginStatus = isCreate ? '正在创建账号...' : '正在登录...';
+    renderLoginGate();
+
+    try {
+      const payload = await fetchWorkbenchAuthJson(
+        isCreate ? '/api/workbench-auth/register' : '/api/workbench-auth/login',
+        {
+          method: 'POST',
+          body: JSON.stringify({
+            phone,
+            password,
+            inviteCode: String(formData.get('inviteCode') || '').trim(),
+            captchaToken: String(formData.get('captchaToken') || '').trim(),
+            rememberLogin: Boolean(formData.get('rememberLogin')),
+          }),
+        },
+      );
+      saveRememberedPhone(phone, rememberAccount);
+      setWorkbenchUser(payload.user || { phone });
+      loginStatus = '';
+      loginError = '';
+      renderLoginGate();
+      startWorkbench();
+    } catch (error) {
+      loginError = error.message;
       loginStatus = '';
       renderLoginGate();
-      return;
+    } finally {
+      authChecking = false;
+      if (!currentWorkbenchUser) renderLoginGate();
     }
+  });
 
-    const verified = loginMethod === 'sms'
-      ? consumeWorkbenchSmsCode(phone, smsCode)
-      : account.password === password;
+  mountWorkbenchCaptcha();
+}
 
-    if (!verified) {
-      loginError = loginMethod === 'sms' ? '短信验证码不正确或已过期。' : '手机号或密码不正确。';
-      loginStatus = '';
-      renderLoginGate();
-      return;
-    }
+async function initializeWorkbenchAuth() {
+  authChecking = true;
+  renderLoginGate();
+  await loadWorkbenchCaptchaConfig();
 
-    saveWorkbenchSession(phone);
+  try {
+    const payload = await fetchWorkbenchAuthJson('/api/workbench-auth/me', {
+      cache: 'no-store',
+    });
+    setWorkbenchUser(payload.user || {});
+  } catch {
+    clearWorkbenchUser();
     loginStatus = '';
     loginError = '';
+  } finally {
+    authChecking = false;
     renderLoginGate();
-    startWorkbench();
-  });
+    if (currentWorkbenchUser) {
+      startWorkbench();
+    }
+  }
 }
 
 function renderAccountSession() {
@@ -887,8 +891,12 @@ function renderAccountSession() {
   });
 }
 
-function logoutWorkbench() {
-  clearWorkbenchSession();
+async function logoutWorkbench() {
+  await fetch(apiUrl('/api/workbench-auth/logout'), {
+    method: 'POST',
+    credentials: 'include',
+  }).catch(() => {});
+  clearWorkbenchUser();
   settingsOpen = false;
   emailRuleControlOpen = false;
   overviewOpen = true;
@@ -3931,7 +3939,4 @@ emailRuleControlBackdropEl?.addEventListener('click', () => {
   closeEmailRuleControl();
 });
 
-renderLoginGate();
-if (currentWorkbenchUser) {
-  startWorkbench();
-}
+initializeWorkbenchAuth();

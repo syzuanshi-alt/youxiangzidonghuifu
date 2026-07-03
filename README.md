@@ -315,6 +315,15 @@ Railway 环境变量最小配置：
 
 ```bash
 WORKBENCH_DATA_DIR=/data
+WORKBENCH_AUTH_REQUIRED=true
+WORKBENCH_SESSION_SECRET=生成一个随机长密钥
+WORKBENCH_SIGNUP_INVITE_CODE=内部开户注册码
+WORKBENCH_SESSION_TTL_HOURS=8
+WORKBENCH_REMEMBER_TTL_DAYS=30
+WORKBENCH_CAPTCHA_REQUIRED=true
+WORKBENCH_CAPTCHA_PROVIDER=turnstile
+TURNSTILE_SITE_KEY=Cloudflare Turnstile site key
+TURNSTILE_SECRET_KEY=Cloudflare Turnstile secret key
 FEISHU_APP_ID=你的 App ID
 FEISHU_APP_SECRET=你的 App Secret
 FEISHU_USER_MAILBOX_ID=目标邮箱 user_mailbox_id
@@ -337,13 +346,17 @@ FEISHU_DAILY_ARCHIVE_LIMIT=0
 上线顺序：
 
 1. 先保持 `FEISHU_AUTO_PROCESS_SCHEDULE_ENABLED=false` 部署，避免未验证前后台自动处理。
-2. 在飞书开放平台把回调地址配置为 `https://<Railway域名>/oauth/callback`。
-3. 打开 `https://<Railway域名>/oauth/start?state=railway-prod` 完成飞书 OAuth。
-4. 检查 `https://<Railway域名>/healthz` 返回 200，再检查 `/api/feishu/status` 和邮件读取接口。
-5. 用真实低风险测试邮件验证发送、审计日志和重启后处理状态保留。
-6. 验证通过后再把 `FEISHU_AUTO_PROCESS_SCHEDULE_ENABLED=true`，进入半自动发送。
+2. 确认 Railway Volume 已挂载到 `/data`，否则账号、Session、OAuth token 和审计日志会在重启后丢失。
+3. 打开 `https://<Railway域名>/`，用内部开户注册码创建第一个真实工作台账号。
+4. 在飞书开放平台把回调地址配置为 `https://<Railway域名>/oauth/callback`。
+5. 登录工作台后打开 `https://<Railway域名>/oauth/start?state=railway-prod` 完成飞书 OAuth。
+6. 检查 `https://<Railway域名>/healthz` 返回 200，再检查 `/api/feishu/status` 和邮件读取接口。
+7. 用真实低风险测试邮件验证发送、审计日志和重启后处理状态保留。
+8. 验证通过后再把 `FEISHU_AUTO_PROCESS_SCHEDULE_ENABLED=true`，进入半自动发送。
 
 默认 `/oauth/start` 只申请 `offline_access`、邮件读取正文 / 地址 / 主题和 `mail:user_mailbox.message:send`。归档 / 移箱、飞书机器人通知等第二阶段能力需要先在飞书开放平台追加权限，再用 `FEISHU_OAUTH_SCOPE` 显式覆盖授权范围。
+
+工作台登录保护使用手机号 + 密码，密码只在服务端以加盐哈希保存；浏览器只可记住账号，不能明文保存密码。真人验证默认使用 Cloudflare Turnstile，未配置 `TURNSTILE_SITE_KEY` / `TURNSTILE_SECRET_KEY` 时不要在公网开启 `WORKBENCH_CAPTCHA_REQUIRED=true`。短信验证码登录第一版未启用，不会再显示本地模拟短信。
 
 回滚或紧急暂停时，立即关闭：
 

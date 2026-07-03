@@ -186,6 +186,9 @@ import {
   resolveWorkbenchDataRoot,
 } from '../server/feishuApiServer.mjs';
 import {
+  createWorkbenchAuthStore,
+} from '../server/workbenchAuthStore.mjs';
+import {
   mergeLocalEnv,
   parseEnvContent,
 } from '../server/envLoader.mjs';
@@ -2438,6 +2441,221 @@ async function waitForCondition(predicate, {
 
   return false;
 }
+
+function cookieHeaderFromResponse(response) {
+  return String(response.headers.get('set-cookie') || '')
+    .split(',')
+    .map((part) => part.split(';')[0].trim())
+    .filter(Boolean)
+    .join('; ');
+}
+
+const authStoreRoot = mkdtempSync(join(tmpdir(), 'workbench-auth-store-'));
+try {
+  const authStore = createWorkbenchAuthStore({ rootDir: authStoreRoot });
+  const created = await authStore.createUser({
+    phone: '18800000000',
+    password: 'StrongPass123',
+  });
+
+  assert.equal(created.user.phone, '18800000000');
+  assert.equal(created.user.password, undefined);
+  assert.equal(created.rawRecord.password, undefined);
+  assert.notEqual(created.rawRecord.passwordHash, 'StrongPass123');
+  assert.equal(await authStore.verifyPassword('18800000000', 'StrongPass123'), true);
+  assert.equal(await authStore.verifyPassword('18800000000', 'wrong-password'), false);
+
+  const session = await authStore.createSession({
+    phone: '18800000000',
+    rememberLogin: true,
+  });
+  assert.equal(session.user.phone, '18800000000');
+  assert.equal(typeof session.token, 'string');
+  assert.equal(session.token.length > 40, true);
+  assert.equal((await authStore.findSession(session.token)).user.phone, '18800000000');
+  await authStore.deleteSession(session.token);
+  assert.equal(await authStore.findSession(session.token), null);
+} finally {
+  rmSync(authStoreRoot, { recursive: true, force: true });
+}
+
+const authApiRoot = mkdtempSync(join(tmpdir(), 'workbench-auth-api-'));
+try {
+  await withTestServer(createFeishuApiServer({
+    rootDir: new URL('../', import.meta.url),
+    env: {
+      WORKBENCH_AUTH_REQUIRED: 'true',
+      WORKBENCH_DATA_DIR: authApiRoot,
+      WORKBENCH_SIGNUP_INVITE_CODE: 'invite-code',
+      WORKBENCH_SESSION_SECRET: 'test-session-secret',
+      WORKBENCH_CAPTCHA_REQUIRED: 'false',
+      FEISHU_APP_ID: 'cli_test_app_id',
+    },
+    fetchImpl: async () => {
+      throw new Error('认证门禁测试不应该请求外部 API。');
+    },
+  }), async (baseUrl) => {
+    const meBeforeLoginResponse = await fetch(`${baseUrl}/api/workbench-auth/me`);
+    const meBeforeLoginPayload = await meBeforeLoginResponse.json();
+    assert.equal(meBeforeLoginResponse.status, 401);
+    assert.equal(meBeforeLoginPayload.ok, false);
+
+    const blockedMessagesResponse = await fetch(`${baseUrl}/api/feishu/mail/messages?all=true&page_size=1`);
+    assert.equal(blockedMessagesResponse.status, 401);
+
+    const blockedProcessResponse = await fetch(`${baseUrl}/api/email-ai/process`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ subject: 'test' }),
+    });
+    assert.equal(blockedProcessResponse.status, 401);
+
+    const blockedActionResponse = await fetch(`${baseUrl}/api/feishu/mail/actions/process`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({}),
+    });
+    assert.equal(blockedActionResponse.status, 401);
+
+    const registerWithoutInviteResponse = await fetch(`${baseUrl}/api/workbench-auth/register`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({
+        phone: '18800000000',
+        password: 'StrongPass123',
+      }),
+    });
+    assert.equal(registerWithoutInviteResponse.status, 403);
+
+    const registerResponse = await fetch(`${baseUrl}/api/workbench-auth/register`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({
+        phone: '18800000000',
+        password: 'StrongPass123',
+        inviteCode: 'invite-code',
+        rememberLogin: true,
+      }),
+    });
+    const registerPayload = await registerResponse.json();
+    const registerCookie = cookieHeaderFromResponse(registerResponse);
+    assert.equal(registerResponse.status, 201);
+    assert.equal(registerPayload.ok, true);
+    assert.equal(registerPayload.user.phone, '18800000000');
+    assert.match(registerResponse.headers.get('set-cookie'), /workbench_session=/);
+    assert.match(registerResponse.headers.get('set-cookie'), /HttpOnly/i);
+
+    const meResponse = await fetch(`${baseUrl}/api/workbench-auth/me`, {
+      headers: { cookie: registerCookie },
+    });
+    const mePayload = await meResponse.json();
+    assert.equal(meResponse.status, 200);
+    assert.equal(mePayload.user.phone, '18800000000');
+
+    const rawStore = JSON.parse(readFileSync(join(authApiRoot, 'data/workbench-auth-store.json'), 'utf8'));
+    assert.equal(rawStore.users[0].password, undefined);
+    assert.notEqual(rawStore.users[0].passwordHash, 'StrongPass123');
+
+    const logoutResponse = await fetch(`${baseUrl}/api/workbench-auth/logout`, {
+      method: 'POST',
+      headers: { cookie: registerCookie },
+    });
+    assert.equal(logoutResponse.status, 200);
+
+    const meAfterLogoutResponse = await fetch(`${baseUrl}/api/workbench-auth/me`, {
+      headers: { cookie: registerCookie },
+    });
+    assert.equal(meAfterLogoutResponse.status, 401);
+
+    const wrongPasswordResponse = await fetch(`${baseUrl}/api/workbench-auth/login`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({
+        phone: '18800000000',
+        password: 'wrong-password',
+      }),
+    });
+    assert.equal(wrongPasswordResponse.status, 401);
+
+    const loginResponse = await fetch(`${baseUrl}/api/workbench-auth/login`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({
+        phone: '18800000000',
+        password: 'StrongPass123',
+      }),
+    });
+    const loginCookie = cookieHeaderFromResponse(loginResponse);
+    assert.equal(loginResponse.status, 200);
+    assert.match(loginResponse.headers.get('set-cookie'), /workbench_session=/);
+
+    const authenticatedMessagesResponse = await fetch(`${baseUrl}/api/feishu/mail/messages?all=true&page_size=1`, {
+      headers: { cookie: loginCookie },
+    });
+    assert.notEqual(authenticatedMessagesResponse.status, 401);
+  });
+} finally {
+  rmSync(authApiRoot, { recursive: true, force: true });
+}
+
+const captchaApiRoot = mkdtempSync(join(tmpdir(), 'workbench-auth-captcha-'));
+try {
+  await withTestServer(createFeishuApiServer({
+    rootDir: new URL('../', import.meta.url),
+    env: {
+      WORKBENCH_AUTH_REQUIRED: 'true',
+      WORKBENCH_DATA_DIR: captchaApiRoot,
+      WORKBENCH_SIGNUP_INVITE_CODE: 'invite-code',
+      WORKBENCH_SESSION_SECRET: 'test-session-secret',
+      WORKBENCH_CAPTCHA_REQUIRED: 'true',
+      WORKBENCH_CAPTCHA_PROVIDER: 'turnstile',
+      TURNSTILE_SITE_KEY: 'site-key-test',
+      TURNSTILE_SECRET_KEY: 'secret-key-test',
+      FEISHU_APP_ID: 'cli_test_app_id',
+    },
+    fetchImpl: async () => {
+      throw new Error('缺少验证码时不应该请求外部 API。');
+    },
+  }), async (baseUrl) => {
+    const captchaConfigResponse = await fetch(`${baseUrl}/api/workbench-auth/captcha/config`);
+    const captchaConfigPayload = await captchaConfigResponse.json();
+    assert.equal(captchaConfigResponse.status, 200);
+    assert.equal(captchaConfigPayload.required, true);
+    assert.equal(captchaConfigPayload.provider, 'turnstile');
+    assert.equal(captchaConfigPayload.siteKey, 'site-key-test');
+    assert.equal(JSON.stringify(captchaConfigPayload).includes('secret-key-test'), false);
+
+    const loginWithoutCaptchaResponse = await fetch(`${baseUrl}/api/workbench-auth/login`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({
+        phone: '18800000000',
+        password: 'StrongPass123',
+      }),
+    });
+    const loginWithoutCaptchaPayload = await loginWithoutCaptchaResponse.json();
+    assert.equal(loginWithoutCaptchaResponse.status, 400);
+    assert.match(loginWithoutCaptchaPayload.message, /真人验证/);
+  });
+} finally {
+  rmSync(captchaApiRoot, { recursive: true, force: true });
+}
+
+await withTestServer(createFeishuApiServer({
+  rootDir: new URL('../', import.meta.url),
+  env: {
+    RAILWAY_PUBLIC_DOMAIN: 'workbench.example.test',
+    FEISHU_APP_ID: 'cli_test_app_id',
+  },
+  fetchImpl: async () => {
+    throw new Error('Railway 默认认证门禁不应该请求外部 API。');
+  },
+}), async (baseUrl) => {
+  const response = await fetch(`${baseUrl}/api/feishu/mail/messages?all=true&page_size=1`);
+  const payload = await response.json();
+  assert.equal(response.status, 401);
+  assert.equal(payload.error, 'workbench_auth_required');
+});
 
 await withTestServer(createFeishuApiServer({
   rootDir: new URL('../', import.meta.url),
