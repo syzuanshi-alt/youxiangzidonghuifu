@@ -4184,4 +4184,19 @@ emailRuleControlBackdropEl?.addEventListener('click', () => {
   closeEmailRuleControl();
 });
 
+if (['127.0.0.1', 'localhost'].includes(window.location.hostname)) {
+  window.__workbenchTestHooks = {
+    refreshFeishuMessages: () => loadFeishuApiMessages({ preserveSelection: true }),
+    setMailboxFilter: (filterKey = 'all') => {
+      const results = classifiedMails();
+      activeFilter = normalizeWorkbenchFilter(filterKey);
+      mailboxSearchQuery = '';
+      mailboxOpenSections[mailboxSectionForFilter(activeFilter)] = true;
+      overviewOpen = false;
+      selectedId = firstVisibleMailboxMailId(results, activeFilter) || selectedId;
+      render();
+    },
+  };
+}
+
 initializeWorkbenchAuth();

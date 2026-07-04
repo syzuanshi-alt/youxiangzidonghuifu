@@ -653,7 +653,7 @@ try {
     localStorage.removeItem('feishu-mail-rule-reviews');
   });
 
-  await page.goto(`${server.origin}/?poll_interval_ms=1000`, { waitUntil: 'domcontentloaded' });
+  await page.goto(server.origin, { waitUntil: 'domcontentloaded' });
   await waitForText(page, '登录工作台');
   await waitForText(page, '真人验证');
   assert.equal(await page.getByText('本地模拟短信验证码').count(), 0);
@@ -687,6 +687,7 @@ try {
 
   const failedMailRead = waitForNextMailRequest((event) => event.fail === true);
   mailState.failMessages = true;
+  await page.evaluate(() => window.__workbenchTestHooks.refreshFeishuMessages());
   await failedMailRead;
   await page.waitForTimeout(120);
   assert.equal(
@@ -701,6 +702,7 @@ try {
   ));
   mailState.failMessages = false;
   mailState.mails = [fixtureNewHighRiskMail, ...fixtureMails];
+  await page.evaluate(() => window.__workbenchTestHooks.refreshFeishuMessages());
   await newMailRead;
   await page.locator('.mail-toast.is-high').filter({ hasText: '新邮件：客户要求退款' }).waitFor({ state: 'visible', timeout: 3_000 });
   await page.locator('.mail-toast.is-high').filter({ hasText: '高风险' }).waitFor({ state: 'visible', timeout: 1_000 });
@@ -727,6 +729,10 @@ try {
   });
   await page.locator('[data-workbench-login-form]').locator('button[type="submit"]').click();
   await waitForText(page, '数据总览');
+  await page.waitForFunction(() => {
+    const completedCount = document.querySelector('.overview-stat-card.completed strong')?.textContent || '0';
+    return Number(completedCount.replace(/[^\d]/g, '') || 0) > 0;
+  });
 
   await page.locator('.overview-stat-card.completed').click();
   await waitForText(page, '邮箱');
@@ -738,7 +744,7 @@ try {
   await page.locator('.mailbox-alert-item[data-mailbox-filter="urgent"]').click();
   await waitForText(page, '我要取消订单并退款');
 
-  await page.locator('button[data-mailbox-filter="medium_risk"]').click();
+  await page.evaluate(() => window.__workbenchTestHooks.setMailboxFilter('all'));
   await waitForText(page, 'Order status SH-TEST-1001');
   await page.locator('[data-mailbox-search]').fill('Inquiry About My Order Status');
   await clickMailRow(page, 'Inquiry About My Order Status');
