@@ -34,9 +34,6 @@ export function applyManualArchiveSelectionToMail(mail = {}, store = {}) {
 
   return {
     ...mail,
-    risk: 'spam',
-    lane: 'white',
-    action: 'ignore',
     requiresReview: false,
     allowsRealSend: false,
     replyDraft: '',

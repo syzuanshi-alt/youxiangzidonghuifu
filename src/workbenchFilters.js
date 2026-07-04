@@ -48,14 +48,22 @@ function hasFailedProcessing(mail = {}) {
   return hasFailedProcessingStatus(mail.processingStatus);
 }
 
+function processingAction(mail = {}) {
+  return mail.processingStatus?.action || mail.processingStatus?.lastAction || '';
+}
+
+function isArchiveProcessingAction(action = '') {
+  return ['archive', 'archived', 'manual_archive', 'auto_archive'].includes(action);
+}
+
 export function getWorkbenchProcessingStatus(mail = {}) {
   const failed = hasFailedProcessing(mail);
   const riskState = getMailRiskState(mail);
 
   if (hasCompletedProcessing(mail)) {
-    const action = mail.processingStatus?.action || mail.processingStatus?.lastAction || '';
+    const action = processingAction(mail);
     const label = mail.processingStatus?.label
-      || (action === 'archive' ? '已归档/移箱' : '已完成回复');
+      || (isArchiveProcessingAction(action) ? '已归档/移箱' : '已完成回复');
 
     return {
       status: 'completed',
@@ -94,6 +102,24 @@ export function getWorkbenchProcessingStatus(mail = {}) {
     completed: false,
     urgent: false,
   };
+}
+
+export function getWorkbenchMailBadgeState(mail = {}) {
+  const processingStatus = getWorkbenchProcessingStatus(mail);
+  const action = processingAction(mail);
+
+  if (processingStatus.status === 'completed' && isArchiveProcessingAction(action)) {
+    return {
+      risk: 'archived',
+      label: processingStatus.label || '已归档/移箱',
+      lane: 'archived',
+      action,
+      urgent: false,
+      spam: false,
+    };
+  }
+
+  return getMailRiskState(mail);
 }
 
 export function filterWorkbenchMails(results, filterKey, { reviews = {} } = {}) {

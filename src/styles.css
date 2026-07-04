@@ -668,6 +668,12 @@ textarea {
   border: 1px solid var(--white-risk-line);
 }
 
+.risk-archived {
+  background: var(--green-bg);
+  color: var(--green);
+  border: 1px solid rgba(43, 229, 116, 0.42);
+}
+
 .mail-toast-stack {
   position: fixed;
   right: 20px;
@@ -6533,6 +6539,7 @@ body::before {
 }
 
 .risk-low,
+.risk-archived,
 .status-pill-completed {
   border-color: rgba(43, 229, 116, 0.52);
   background: rgba(23, 138, 78, 0.18);

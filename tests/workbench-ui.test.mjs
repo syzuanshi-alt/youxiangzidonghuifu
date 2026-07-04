@@ -844,13 +844,24 @@ try {
     true,
     '归档 / 移箱 should call the archive endpoint',
   );
+  await page.evaluate(() => window.__workbenchTestHooks.setMailboxFilter('archived'));
+  await waitForText(page, 'SEO backlinks 广告外链推广');
+  const archivedSpamRow = await page.locator('.mail-row').filter({ hasText: 'SEO backlinks 广告外链推广' }).first().innerText();
+  assert.match(archivedSpamRow, /已归档/);
+  assert.doesNotMatch(archivedSpamRow, /垃圾邮件/);
 
+  await page.locator('[data-mailbox-search]').fill('');
   await page.locator('button[data-mailbox-filter="medium_risk"]').click();
   await clickMailRow(page, 'Order status SH-TEST-1001');
   await page.locator('[data-manual-archive-toggle]').check();
   await page.locator('[data-confirm-manual-archive]').click();
   const manualArchiveSelections = await readJsonLocalStorage(page, 'feishu-mail-manual-archive-selections');
   assert.equal(manualArchiveSelections['MAIL-MEDIUM']?.checked, true);
+  await page.evaluate(() => window.__workbenchTestHooks.setMailboxFilter('archived'));
+  await waitForText(page, 'Order status SH-TEST-1001');
+  const manuallyArchivedRow = await page.locator('.mail-row').filter({ hasText: 'Order status SH-TEST-1001' }).first().innerText();
+  assert.match(manuallyArchivedRow, /已归档/);
+  assert.doesNotMatch(manuallyArchivedRow, /垃圾邮件/);
 
   await page.evaluate(async () => {
     localStorage.setItem('email-ai-admin-token', 'admin-secret');

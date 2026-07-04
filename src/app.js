@@ -60,6 +60,7 @@ import {
   buildWorkbenchFilterMetrics,
   findFirstWorkbenchMailId,
   filterWorkbenchMails,
+  getWorkbenchMailBadgeState,
   getWorkbenchProcessingStatus,
   normalizeWorkbenchFilter,
 } from './workbenchFilters.js';
@@ -3450,12 +3451,13 @@ function renderList(results) {
   targetListEl.innerHTML = visibleResults.map((mail) => {
     const processingStatus = getWorkbenchProcessingStatus(mail);
     const riskState = getMailRiskState(mail);
+    const badgeState = getWorkbenchMailBadgeState(mail);
 
     return `
       <button class="mail-row compact-mail-row lane-${riskState.lane} status-${processingStatus.status} ${mail.id === selectedId ? 'active' : ''}" data-id="${escapeHtml(mail.id)}">
         <span class="row-top">
           <strong>${displayText(mail.subject, '(无标题)')}</strong>
-          <em class="risk risk-${riskState.risk}">${displayText(riskState.label || riskText[riskState.risk])}</em>
+          <em class="risk risk-${badgeState.risk}">${displayText(badgeState.label || riskText[badgeState.risk])}</em>
         </span>
         <span class="row-meta">${displayText(mail.sender, '未知发件人')}</span>
         <span class="row-bottom">

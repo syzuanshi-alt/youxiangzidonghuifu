@@ -58,7 +58,8 @@ export function evaluateSendGuard(mail, context = {}) {
   const isDuplicate = repliedMessageIds.has(messageId) || repliedThreadKeys.has(threadKey);
   const isThreadMismatch = expectedThreadKey !== threadKey;
   const isBlocked = riskState.urgent;
-  const isIgnored = riskState.spam;
+  const isManualArchive = mail.manualArchive?.checked === true;
+  const isIgnored = riskState.spam || isManualArchive;
   const needsReview = mail.requiresReview || riskState.action === 'draft_only' || riskState.risk === 'medium';
   const hasSendableTemplate = Boolean(mail.templateId && mail.replyDraft);
   const realSendEnabled = mail.allowsRealSend === true;
@@ -84,9 +85,13 @@ export function evaluateSendGuard(mail, context = {}) {
     ),
     makeCheck(
       'not_spam',
-      '不是垃圾或骚扰邮件',
+      '不是垃圾或手动归档邮件',
       !isIgnored,
-      isIgnored ? '垃圾 / 骚扰邮件不生成回复，建议归档或移入垃圾邮件箱。' : '未命中垃圾邮件队列。',
+      isIgnored
+        ? isManualArchive
+          ? '人工已选择归档 / 移箱，不生成回复，不进入发送队列。'
+          : '垃圾 / 骚扰邮件不生成回复，建议归档或移入垃圾邮件箱。'
+        : '未命中垃圾邮件队列。',
     ),
     makeCheck(
       'review_not_required',

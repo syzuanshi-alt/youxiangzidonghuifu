@@ -200,6 +200,7 @@ const {
   WORKBENCH_FILTERS,
   buildWorkbenchFilterMetrics,
   filterWorkbenchMails,
+  getWorkbenchMailBadgeState,
   getWorkbenchProcessingStatus,
   normalizeWorkbenchFilter,
 } = workbenchFilters;
@@ -351,16 +352,18 @@ const manualArchiveStore = upsertManualArchiveSelection({}, {
 });
 assert.equal(manualArchiveStore['manual-archive-001'].checked, true);
 
-const manuallyArchivedMail = applyManualArchiveSelectionToMail(classifyMail({
+const manualArchiveSourceMail = classifyMail({
   id: 'manual-archive-001',
   messageId: 'manual-archive-001',
   subject: '普通流程咨询',
   sender: 'buyer-manual@example.test',
   summary: '客户询问普通处理流程，但人工判断本封无需回复。',
-}), manualArchiveStore);
+});
+const manuallyArchivedMail = applyManualArchiveSelectionToMail(manualArchiveSourceMail, manualArchiveStore);
 assert.equal(manuallyArchivedMail.manualArchive.checked, true);
-assert.equal(manuallyArchivedMail.action, 'ignore');
-assert.equal(manuallyArchivedMail.risk, 'spam');
+assert.equal(manuallyArchivedMail.action, manualArchiveSourceMail.action);
+assert.equal(manuallyArchivedMail.risk, manualArchiveSourceMail.risk);
+assert.notEqual(manuallyArchivedMail.risk, 'spam');
 assert.equal(manuallyArchivedMail.requiresReview, false);
 
 const manuallyArchivedDraft = buildDraftRecord(manuallyArchivedMail);
@@ -371,6 +374,7 @@ const manuallyArchivedQueue = buildSendQueueItem(manuallyArchivedMail, manuallyA
 });
 assert.equal(manuallyArchivedQueue.queueStatus, 'ignored');
 assert.equal(manuallyArchivedQueue.canEnterQueue, false);
+assert.equal(manuallyArchivedQueue.reason.includes('垃圾'), false);
 const manualArchiveCompletion = buildManualArchiveCompletionResult(manuallyArchivedMail, {
   message: '服务端归档未开启，已先在工作台标记为手动归档。',
   updatedAt: '2026-06-15T00:00:00.000Z',
@@ -379,6 +383,14 @@ assert.equal(manualArchiveCompletion.ok, true);
 assert.equal(manualArchiveCompletion.action, 'manual_archive');
 assert.equal(manualArchiveCompletion.mode, 'local_manual_archive');
 assert.match(manualArchiveCompletion.message, /手动归档/);
+assert.equal(getWorkbenchMailBadgeState({
+  ...manuallyArchivedMail,
+  processingStatus: {
+    status: 'completed',
+    action: 'archive',
+    label: '已归档/移箱',
+  },
+}).label, '已归档/移箱');
 const confirmedManualArchive = confirmManualArchiveSelection({}, manuallyArchivedMail, {
   checked: true,
   note: '人工判断不需要回复，直接归档。',

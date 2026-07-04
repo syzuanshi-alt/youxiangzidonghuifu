@@ -10,7 +10,8 @@ function isReviewApproved(review) {
 export function buildDraftRecord(mail, review = null) {
   const riskState = getMailRiskState(mail);
   const hasDraftContent = Boolean(mail.templateId && mail.replyDraft);
-  const isIgnored = riskState.spam;
+  const isManualArchive = mail.manualArchive?.checked === true;
+  const isIgnored = riskState.spam || isManualArchive;
   const canSaveDraft = !isIgnored && !riskState.urgent && hasDraftContent;
   const requiresApproval = canSaveDraft && (mail.requiresReview || riskState.action === 'draft_only' || riskState.risk === 'medium');
   const approved = requiresApproval ? isReviewApproved(review) : canSaveDraft;
@@ -31,7 +32,7 @@ export function buildDraftRecord(mail, review = null) {
     messageId: mail.messageId || mail.id,
     threadId: mail.threadId || null,
     templateId: mail.templateId,
-    action: riskState.action,
+    action: isManualArchive ? 'manual_archive' : riskState.action,
     risk: riskState.risk,
     canSaveDraft,
     requiresApproval,
@@ -44,6 +45,7 @@ export function buildDraftRecord(mail, review = null) {
 export function buildSendQueueItem(mail, draftRecord, sendGuard) {
   const guardBlocked = BLOCKING_GUARD_MODES.has(sendGuard.mode);
   const waitingReview = draftRecord.status === 'waiting_review';
+  const isManualArchive = mail.manualArchive?.checked === true || draftRecord.action === 'manual_archive';
   const canEnterQueue = draftRecord.canSaveDraft && !waitingReview && !guardBlocked;
 
   let queueStatus = 'simulation_queued';
@@ -71,7 +73,9 @@ export function buildSendQueueItem(mail, draftRecord, sendGuard) {
     simulatedOnly: !sendGuard.allowed && canEnterQueue,
     content: draftRecord.content,
     reason: queueStatus === 'ignored'
-      ? '垃圾 / 骚扰邮件不生成回复，满足自动归档开关后可移箱。'
+      ? isManualArchive
+        ? '人工选择归档 / 移箱，不生成回复，不进入发送队列。'
+        : '垃圾 / 骚扰邮件不生成回复，满足自动归档开关后可移箱。'
       : canEnterQueue
         ? '已进入草稿队列，真实发送仍需服务端闭环校验。'
         : sendGuard.reasons[0] || '草稿未满足入队条件。',
