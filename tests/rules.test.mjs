@@ -1276,9 +1276,14 @@ const blockedMediumConflict = {
 assert.deepEqual(WORKBENCH_FILTERS.map((filter) => filter.key), [
   'all',
   'pending',
-  'urgent',
   'completed',
   'spam',
+]);
+assert.deepEqual(WORKBENCH_FILTERS.map((filter) => filter.label), [
+  '收件箱',
+  '待处理',
+  '已处理',
+  '垃圾邮件',
 ]);
 assert.equal(getWorkbenchProcessingStatus(workbenchFilterRows[0]).status, 'pending');
 assert.equal(getWorkbenchProcessingStatus(workbenchFilterRows[2]).status, 'urgent');
@@ -1310,10 +1315,12 @@ assert.deepEqual(
   ['FILTER-LOW', 'FILTER-MEDIUM', 'FILTER-HIGH'],
 );
 assert.deepEqual(
-  filterWorkbenchMails(workbenchFilterRows, 'inbox').map((mail) => mail.id),
-  ['FILTER-LOW', 'FILTER-MEDIUM'],
+  filterWorkbenchMails(workbenchFilterRows, 'all').map((mail) => mail.id),
+  ['FILTER-LOW', 'FILTER-MEDIUM', 'FILTER-HIGH', 'FILTER-SPAM'],
 );
-assert.equal(normalizeWorkbenchFilter('high_risk'), 'urgent');
+assert.equal(normalizeWorkbenchFilter('inbox'), 'all');
+assert.equal(normalizeWorkbenchFilter('high_risk'), 'pending');
+assert.equal(normalizeWorkbenchFilter('urgent'), 'pending');
 assert.deepEqual(
   filterWorkbenchMails(workbenchFilterRows, 'low_risk').map((mail) => mail.id),
   ['FILTER-LOW'],
@@ -1324,11 +1331,11 @@ assert.deepEqual(
 );
 assert.deepEqual(
   filterWorkbenchMails([...workbenchFilterRows, blockedMediumConflict], 'high_risk').map((mail) => mail.id),
-  ['FILTER-HIGH', 'FILTER-BLOCKED-MEDIUM-CONFLICT'],
+  ['FILTER-LOW', 'FILTER-MEDIUM', 'FILTER-HIGH', 'FILTER-BLOCKED-MEDIUM-CONFLICT'],
 );
 assert.deepEqual(
   filterWorkbenchMails([...workbenchFilterRows, blockedMediumConflict], 'urgent').map((mail) => mail.id),
-  ['FILTER-HIGH', 'FILTER-BLOCKED-MEDIUM-CONFLICT'],
+  ['FILTER-LOW', 'FILTER-MEDIUM', 'FILTER-HIGH', 'FILTER-BLOCKED-MEDIUM-CONFLICT'],
 );
 assert.deepEqual(
   filterWorkbenchMails(workbenchFilterRows, 'completed').map((mail) => mail.id),
@@ -1366,14 +1373,14 @@ const workbenchMetrics = buildWorkbenchFilterMetrics({
 });
 assert.equal(workbenchMetrics.find((metric) => metric.key === 'all').count, 4);
 assert.equal(workbenchMetrics.find((metric) => metric.key === 'pending').count, 3);
-assert.equal(workbenchMetrics.find((metric) => metric.key === 'urgent').count, 1);
+assert.equal(workbenchMetrics.find((metric) => metric.key === 'urgent'), undefined);
 assert.equal(workbenchMetrics.find((metric) => metric.key === 'completed').count, 0);
 assert.equal(workbenchMetrics.find((metric) => metric.key === 'all').label, 'API 邮件');
 assert.equal(workbenchMetrics.find((metric) => metric.key === 'all').sourceStatus, '真实接入');
 assert.equal(workbenchMetrics.find((metric) => metric.key === 'spam').openLabel, '打开垃圾邮件');
 assert.equal(typeof workbenchFilters.findFirstWorkbenchMailId, 'function');
 assert.equal(workbenchFilters.findFirstWorkbenchMailId(workbenchFilterRows, 'pending', { reviews: {} }), 'FILTER-LOW');
-assert.equal(workbenchFilters.findFirstWorkbenchMailId(workbenchFilterRows, 'urgent', { reviews: {} }), 'FILTER-HIGH');
+assert.equal(workbenchFilters.findFirstWorkbenchMailId(workbenchFilterRows, 'urgent', { reviews: {} }), 'FILTER-LOW');
 
 assert.equal(typeof workbenchFilters.buildQueueNavigationItems, 'function');
 const queueNavigationItems = workbenchFilters.buildQueueNavigationItems(workbenchFilterRows);
@@ -1411,7 +1418,7 @@ assert.deepEqual(
 );
 assert.deepEqual(
   filterWorkbenchMails(workbenchRowsWithCompleted, 'urgent').map((mail) => mail.id),
-  [],
+  ['FILTER-MEDIUM'],
 );
 assert.deepEqual(
   filterWorkbenchMails(workbenchRowsWithCompleted, 'pending').map((mail) => mail.id),
@@ -1449,7 +1456,7 @@ assert.equal(completedStatusWinsOverLocalFailure.status, 'completed');
 assert.equal(completedStatusWinsOverLocalFailure.label, '已自动回复');
 assert.deepEqual(
   filterWorkbenchMails([...workbenchFilterRows, failedLowRisk], 'urgent').map((mail) => mail.id),
-  ['FILTER-HIGH'],
+  ['FILTER-LOW', 'FILTER-MEDIUM', 'FILTER-HIGH', 'FILTER-FAILED-LOW'],
 );
 assert.deepEqual(
   filterWorkbenchMails([...workbenchFilterRows, failedLowRisk], 'pending').map((mail) => mail.id),
@@ -2546,35 +2553,43 @@ const authStoreRoot = mkdtempSync(join(tmpdir(), 'workbench-auth-store-'));
 try {
   const authStore = createWorkbenchAuthStore({ rootDir: authStoreRoot });
   const created = await authStore.createUser({
-    phone: '18800000000',
+    account: 'ops.team@example.com',
     password: 'StrongPass123',
   });
 
-  assert.equal(created.user.phone, '18800000000');
+  assert.equal(created.user.account, 'ops.team@example.com');
+  assert.equal(created.user.phone, '');
   assert.equal(created.user.password, undefined);
   assert.equal(created.rawRecord.password, undefined);
   assert.notEqual(created.rawRecord.passwordHash, 'StrongPass123');
-  assert.equal(await authStore.verifyPassword('18800000000', 'StrongPass123'), true);
-  assert.equal(await authStore.verifyPassword('18800000000', 'wrong-password'), false);
-  await authStore.updatePassword({ phone: '18800000000', newPassword: 'ChangedPass123' });
-  assert.equal(await authStore.verifyPassword('18800000000', 'StrongPass123'), false);
-  assert.equal(await authStore.verifyPassword('18800000000', 'ChangedPass123'), true);
+  assert.equal(await authStore.verifyPassword('ops.team@example.com', 'StrongPass123'), true);
+  assert.equal(await authStore.verifyPassword('ops.team@example.com', 'wrong-password'), false);
+  await authStore.updatePassword({ account: 'ops.team@example.com', newPassword: 'ChangedPass123' });
+  assert.equal(await authStore.verifyPassword('ops.team@example.com', 'StrongPass123'), false);
+  assert.equal(await authStore.verifyPassword('ops.team@example.com', 'ChangedPass123'), true);
+  const alphaUser = await authStore.createUser({
+    account: 'agent_01',
+    password: 'AlphaPass123',
+  });
+  assert.equal(alphaUser.user.account, 'agent_01');
+  assert.equal(await authStore.verifyPassword('agent_01', 'AlphaPass123'), true);
   const countryCodeUser = await authStore.createUser({
     phone: '+86 17694856832',
     password: 'CountryCodePass123',
   });
+  assert.equal(countryCodeUser.user.account, '17694856832');
   assert.equal(countryCodeUser.user.phone, '17694856832');
   assert.equal(await authStore.verifyPassword('17694856832', 'CountryCodePass123'), true);
   assert.equal(await authStore.verifyPassword('8617694856832', 'CountryCodePass123'), true);
 
   const session = await authStore.createSession({
-    phone: '18800000000',
+    account: 'ops.team@example.com',
     rememberLogin: true,
   });
-  assert.equal(session.user.phone, '18800000000');
+  assert.equal(session.user.account, 'ops.team@example.com');
   assert.equal(typeof session.token, 'string');
   assert.equal(session.token.length > 40, true);
-  assert.equal((await authStore.findSession(session.token)).user.phone, '18800000000');
+  assert.equal((await authStore.findSession(session.token)).user.account, 'ops.team@example.com');
   await authStore.deleteSession(session.token);
   assert.equal(await authStore.findSession(session.token), null);
 } finally {
@@ -2623,7 +2638,7 @@ try {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
       body: JSON.stringify({
-        phone: '18800000000',
+        account: 'ops.team@example.com',
         password: 'StrongPass123',
       }),
     });
@@ -2633,7 +2648,7 @@ try {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
       body: JSON.stringify({
-        phone: '18800000000',
+        account: 'ops.team@example.com',
         password: 'StrongPass123',
         inviteCode: 'invite-code',
         rememberLogin: true,
@@ -2643,7 +2658,8 @@ try {
     const registerCookie = cookieHeaderFromResponse(registerResponse);
     assert.equal(registerResponse.status, 201);
     assert.equal(registerPayload.ok, true);
-    assert.equal(registerPayload.user.phone, '18800000000');
+    assert.equal(registerPayload.user.account, 'ops.team@example.com');
+    assert.equal(registerPayload.user.phone, '');
     assert.match(registerResponse.headers.get('set-cookie'), /workbench_session=/);
     assert.match(registerResponse.headers.get('set-cookie'), /HttpOnly/i);
     assert.match(registerResponse.headers.get('set-cookie'), /Max-Age=2592000/);
@@ -2653,7 +2669,7 @@ try {
     });
     const mePayload = await meResponse.json();
     assert.equal(meResponse.status, 200);
-    assert.equal(mePayload.user.phone, '18800000000');
+    assert.equal(mePayload.user.account, 'ops.team@example.com');
 
     const rawStore = JSON.parse(readFileSync(join(authApiRoot, 'data/workbench-auth-store.json'), 'utf8'));
     assert.equal(rawStore.users[0].password, undefined);
@@ -2674,7 +2690,7 @@ try {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
       body: JSON.stringify({
-        phone: '18800000000',
+        account: 'ops.team@example.com',
         password: 'wrong-password',
       }),
     });
@@ -2684,7 +2700,7 @@ try {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
       body: JSON.stringify({
-        phone: '18800000000',
+        account: 'ops.team@example.com',
         password: 'StrongPass123',
       }),
     });
@@ -2735,7 +2751,7 @@ try {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
       body: JSON.stringify({
-        phone: '18800000000',
+        account: 'ops.team@example.com',
         password: 'StrongPass123',
       }),
     });
@@ -2745,7 +2761,7 @@ try {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
       body: JSON.stringify({
-        phone: '18800000000',
+        account: 'ops.team@example.com',
         password: 'ChangedPass123',
       }),
     });
@@ -2755,7 +2771,7 @@ try {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
       body: JSON.stringify({
-        phone: '18800000000',
+        account: 'ops.team@example.com',
         newPassword: 'ResetPass123',
         resetCode: 'wrong-code',
       }),
@@ -2766,7 +2782,7 @@ try {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
       body: JSON.stringify({
-        phone: '18800000000',
+        account: 'ops.team@example.com',
         newPassword: 'ResetPass123',
         resetCode: 'invite-code',
       }),
@@ -2779,7 +2795,7 @@ try {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
       body: JSON.stringify({
-        phone: '18800000000',
+        account: 'ops.team@example.com',
         password: 'ChangedPass123',
       }),
     });
@@ -2789,7 +2805,7 @@ try {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
       body: JSON.stringify({
-        phone: '18800000000',
+        account: 'ops.team@example.com',
         password: 'ResetPass123',
       }),
     });
@@ -2799,7 +2815,9 @@ try {
     const authenticatedMessagesResponse = await fetch(`${baseUrl}/api/feishu/mail/messages?all=true&page_size=1`, {
       headers: { cookie: resetPasswordLoginCookie || resetPasswordCookie || changePasswordCookie },
     });
-    assert.notEqual(authenticatedMessagesResponse.status, 401);
+    assert.equal(authenticatedMessagesResponse.status, 409);
+    const authenticatedMessagesPayload = await authenticatedMessagesResponse.json();
+    assert.equal(authenticatedMessagesPayload.error, 'mailbox_binding_required');
 
     const countryCodeRegisterResponse = await fetch(`${baseUrl}/api/workbench-auth/register`, {
       method: 'POST',
@@ -2812,6 +2830,7 @@ try {
     });
     const countryCodeRegisterPayload = await countryCodeRegisterResponse.json();
     assert.equal(countryCodeRegisterResponse.status, 201);
+    assert.equal(countryCodeRegisterPayload.user.account, '17694856832');
     assert.equal(countryCodeRegisterPayload.user.phone, '17694856832');
 
     const countryCodeLoginResponse = await fetch(`${baseUrl}/api/workbench-auth/login`, {
@@ -2823,6 +2842,36 @@ try {
       }),
     });
     assert.equal(countryCodeLoginResponse.status, 200);
+    const countryCodeLoginCookie = cookieHeaderFromResponse(countryCodeLoginResponse);
+
+    const bindMailboxResponse = await fetch(`${baseUrl}/api/feishu/config/update`, {
+      method: 'POST',
+      headers: {
+        'content-type': 'application/json',
+        cookie: resetPasswordLoginCookie || resetPasswordCookie || changePasswordCookie,
+      },
+      body: JSON.stringify({
+        mailboxAddress: 'ops-mailbox@example.com',
+        botReportEmail: 'ops-report@example.com',
+      }),
+    });
+    const bindMailboxPayload = await bindMailboxResponse.json();
+    assert.equal(bindMailboxResponse.status, 200);
+    assert.equal(bindMailboxPayload.mailboxBound, true);
+
+    const accountAStatusResponse = await fetch(`${baseUrl}/api/feishu/status`, {
+      headers: { cookie: resetPasswordLoginCookie || resetPasswordCookie || changePasswordCookie },
+    });
+    const accountAStatusPayload = await accountAStatusResponse.json();
+    assert.equal(accountAStatusPayload.mailboxBound, true);
+    assert.equal(accountAStatusPayload.mailboxAddress, 'ops-mailbox@example.com');
+
+    const accountBStatusResponse = await fetch(`${baseUrl}/api/feishu/status`, {
+      headers: { cookie: countryCodeLoginCookie },
+    });
+    const accountBStatusPayload = await accountBStatusResponse.json();
+    assert.equal(accountBStatusPayload.mailboxBound, false);
+    assert.equal(accountBStatusPayload.mailboxAddress, '');
 
     const countryCodeResetResponse = await fetch(`${baseUrl}/api/workbench-auth/reset-password`, {
       method: 'POST',
@@ -2840,6 +2889,8 @@ try {
     assert.equal(statusAfterAuthPayload.workbenchAuth.storeFileExists, true);
     assert.equal(statusAfterAuthPayload.workbenchAuth.hasUsers, true);
     assert.equal(statusAfterAuthPayload.workbenchAuth.userCount >= 2, true);
+    assert.equal(statusAfterAuthPayload.workbenchTenant.tenantCount >= 2, true);
+    assert.equal(statusAfterAuthPayload.workbenchTenant.boundTenantCount >= 1, true);
     assert.equal(JSON.stringify(statusAfterAuthPayload.workbenchAuth).includes('17694856832'), false);
   });
 } finally {
@@ -4960,6 +5011,24 @@ try {
     assert.equal(aiProcessPayload.success, true);
     assert.equal(aiProcessPayload.risk.level, 'low');
 
+    const skippedAiProcessResponse = await fetch(`${baseUrl}/api/email-ai/process`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({
+        senderEmail: 'buyer-processed@example.test',
+        subject: 'Already handled',
+        body: 'This was already handled.',
+        processingStatus: {
+          status: 'completed',
+          action: 'archive',
+        },
+      }),
+    });
+    assert.equal(skippedAiProcessResponse.status, 200);
+    const skippedAiProcessPayload = await skippedAiProcessResponse.json();
+    assert.equal(skippedAiProcessPayload.skipped, true);
+    assert.equal(skippedAiProcessPayload.finalAction, 'skipped');
+
     const blockedDraftResponse = await fetch(`${baseUrl}/api/admin/email-ai-control/versions/create-draft`, {
       method: 'POST',
       headers: {
@@ -5076,27 +5145,36 @@ assert.ok(indexHtml.includes('data-mailbox-contact-panel'));
 assert.ok(indexHtml.includes('data-mailbox-list-panel'));
 assert.ok(indexHtml.includes('data-mailbox-search'));
 assert.ok(indexHtml.includes('data-open-overview'));
-assert.ok(indexHtml.includes('data-mailbox-section="urgent"'));
-assert.ok(indexHtml.indexOf('data-mailbox-section="urgent"') < indexHtml.indexOf('data-mailbox-section="inbox"'));
-assert.ok(indexHtml.includes('data-mailbox-filter="inbox"'));
-assert.ok(indexHtml.includes('data-mailbox-submenu="inbox"'));
-assert.ok(indexHtml.includes('data-mailbox-filter="urgent"'));
-assert.ok(indexHtml.indexOf('data-mailbox-filter="urgent"') < indexHtml.indexOf('data-mailbox-filter="inbox"'));
-assert.ok(indexHtml.indexOf('data-mailbox-filter="inbox"') < indexHtml.indexOf('data-mailbox-filter="favorite"'));
+assert.ok(indexHtml.includes('data-mailbox-section="all"'));
+assert.ok(indexHtml.includes('data-mailbox-section="pending"'));
+assert.ok(indexHtml.includes('data-mailbox-section="completed"'));
+assert.ok(indexHtml.includes('data-mailbox-section="spam"'));
+assert.ok(indexHtml.indexOf('data-mailbox-section="all"') < indexHtml.indexOf('data-mailbox-section="pending"'));
+assert.ok(indexHtml.indexOf('data-mailbox-section="pending"') < indexHtml.indexOf('data-mailbox-section="completed"'));
+assert.ok(indexHtml.indexOf('data-mailbox-section="completed"') < indexHtml.indexOf('data-mailbox-section="spam"'));
+assert.ok(indexHtml.includes('data-mailbox-filter="all"'));
+assert.ok(indexHtml.includes('data-mailbox-filter="pending"'));
+assert.ok(indexHtml.includes('data-mailbox-filter="completed"'));
+assert.equal(indexHtml.includes('data-mailbox-filter="urgent"'), false);
+assert.equal(indexHtml.includes('data-mailbox-filter="inbox"'), false);
+assert.equal(indexHtml.includes('data-mailbox-submenu="inbox"'), false);
 assert.equal(indexHtml.includes('data-mailbox-filter="high_risk"'), false);
 assert.equal(indexHtml.includes('data-mailbox-count="high_risk"'), false);
-assert.ok(indexHtml.includes('data-mailbox-filter="favorite"'));
-assert.ok(indexHtml.includes('data-mailbox-filter="sent"'));
-assert.ok(indexHtml.includes('data-mailbox-filter="archived"'));
-assert.ok(indexHtml.includes('data-mailbox-filter="deleted"'));
+assert.equal(indexHtml.includes('data-mailbox-filter="favorite"'), false);
+assert.equal(indexHtml.includes('data-mailbox-filter="sent"'), false);
+assert.equal(indexHtml.includes('data-mailbox-filter="archived"'), false);
+assert.equal(indexHtml.includes('data-mailbox-filter="deleted"'), false);
 assert.ok(indexHtml.includes('data-mailbox-filter="spam"'));
-assert.ok(indexHtml.includes('data-mailbox-inline-list="urgent"'));
-assert.ok(indexHtml.includes('data-mailbox-inline-list="inbox"'));
-assert.ok(indexHtml.includes('data-mailbox-inline-list="sent"'));
-assert.ok(indexHtml.includes('data-mailbox-inline-list="archived"'));
-assert.ok(indexHtml.includes('data-mailbox-inline-list="deleted"'));
+assert.ok(indexHtml.includes('data-mailbox-inline-list="all"'));
+assert.ok(indexHtml.includes('data-mailbox-inline-list="pending"'));
+assert.ok(indexHtml.includes('data-mailbox-inline-list="completed"'));
+assert.equal(indexHtml.includes('data-mailbox-inline-list="urgent"'), false);
+assert.equal(indexHtml.includes('data-mailbox-inline-list="inbox"'), false);
+assert.equal(indexHtml.includes('data-mailbox-inline-list="sent"'), false);
+assert.equal(indexHtml.includes('data-mailbox-inline-list="archived"'), false);
+assert.equal(indexHtml.includes('data-mailbox-inline-list="deleted"'), false);
 assert.ok(indexHtml.includes('data-mailbox-inline-list="spam"'));
-assert.ok(indexHtml.indexOf('data-mailbox-submenu="sent"') < indexHtml.indexOf('data-mailbox-inline-list="sent"'));
+assert.ok(indexHtml.includes('data-action-notice-stack'));
 assert.equal(indexHtml.includes('写邮件'), false);
 assert.equal(indexHtml.includes('文件夹'), false);
 

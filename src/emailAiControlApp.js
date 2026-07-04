@@ -121,6 +121,16 @@ async function api(path, options = {}) {
   return payload;
 }
 
+function notify({ type = 'info', title = '操作结果', message = '' } = {}) {
+  window.dispatchEvent(new CustomEvent('workbench:notice', {
+    detail: {
+      type,
+      title,
+      message,
+    },
+  }));
+}
+
 function enabledPill(enabled) {
   return `<span class="pill ${enabled === false ? 'warn' : 'ok'}">${enabled === false ? '停用' : '启用'}</span>`;
 }
@@ -256,20 +266,20 @@ function renderModels() {
       <h2>${editing.id ? '编辑模型服务商' : '新增模型服务商'}</h2>
       <form class="inline-form" data-collection-form="model-providers">
         <input type="hidden" name="id" value="${escapeHtml(editing.id || '')}" />
-        ${field('服务商名称', 'name', editing.name)}
-        ${field('provider key', 'providerKey', editing.providerKey)}
-        ${field('base url', 'baseUrl', editing.baseUrl)}
-        ${field('API Key 环境变量名称', 'apiKeyEnvName', editing.apiKeyEnvName)}
-        ${field('API Key（可选，仅写入本机环境变量，不回显）', 'apiKeyValue', '', 'password', 'wide')}
-        ${field('默认模型名称', 'defaultModel', editing.defaultModel)}
-        ${field('可用模型列表', 'supportedModels', toCsv(editing.supportedModels))}
-        ${selectField('用途', 'usageType', editing.usageType || 'test_only', [['risk_check', '风险判定'], ['reply_generation', '回复生成'], ['both', '两者'], ['fallback', '备用'], ['test_only', '测试']])}
-        ${field('temperature', 'temperature', editing.temperature ?? 0.2, 'number')}
-        ${field('max tokens', 'maxTokens', editing.maxTokens ?? 1200, 'number')}
-        ${field('timeout ms', 'timeoutMs', editing.timeoutMs ?? 5000, 'number')}
-        ${field('retry 次数', 'retryCount', editing.retryCount ?? 0, 'number')}
-        ${checkboxField('启用', 'enabled', editing.enabled !== false)}
-        ${checkboxField('备用模型', 'isFallback', editing.isFallback === true)}
+        ${field('服务商名称', 'name', editing.name, 'text', '', '给同事看的名称，例如 OpenAI、DeepSeek。')}
+        ${field('provider key', 'providerKey', editing.providerKey, 'text', '', '系统内部识别码，建议用英文小写，例如 openai，不要写中文。')}
+        ${field('base url', 'baseUrl', editing.baseUrl, 'text', '', '模型接口地址；OpenAI 官方一般填 https://api.openai.com/v1。')}
+        ${field('API Key 环境变量名称', 'apiKeyEnvName', editing.apiKeyEnvName, 'text', '', 'Railway 变量名，例如 OPENAI_API_KEY；这里不是填写真实 key 内容。')}
+        ${field('API Key（可选，仅写入本机环境变量，不回显）', 'apiKeyValue', '', 'password', 'wide', '只在需要从后台写入本机配置时填写一次，保存后页面不会展示。')}
+        ${field('默认模型名称', 'defaultModel', editing.defaultModel, 'text', '', '真实调用的模型名，例如 gpt-4.1、gpt-4o、deepseek-chat。')}
+        ${field('可用模型列表', 'supportedModels', toCsv(editing.supportedModels), 'text', '', '可选模型，用逗号分隔，方便后续切换。')}
+        ${selectField('用途', 'usageType', editing.usageType || 'test_only', [['risk_check', '风险判定'], ['reply_generation', '回复生成'], ['both', '两者'], ['fallback', '备用'], ['test_only', '测试']], '决定这个模型负责风险判断、回复生成，还是两者都负责。')}
+        ${field('temperature', 'temperature', editing.temperature ?? 0.2, 'number', '', '越低越稳定，客服回复建议 0.2-0.5。')}
+        ${field('max tokens', 'maxTokens', editing.maxTokens ?? 1200, 'number', '', '限制单次输出长度，防止回复过长或费用过高。')}
+        ${field('timeout ms', 'timeoutMs', editing.timeoutMs ?? 5000, 'number', '', '模型请求超时时间，网络慢可适当调大。')}
+        ${field('retry 次数', 'retryCount', editing.retryCount ?? 0, 'number', '', '调用失败后重试次数；太高会增加等待和费用。')}
+        ${checkboxField('启用', 'enabled', editing.enabled !== false, '关闭后这个服务商不会被前台调用。')}
+        ${checkboxField('备用模型', 'isFallback', editing.isFallback === true, '主模型失败时才使用的兜底模型。')}
         <button type="submit">${editing.id ? '保存模型' : '新增服务商'}</button>
         ${editing.id ? '<button class="secondary" type="button" data-cancel-edit>取消编辑</button>' : ''}
       </form>
@@ -277,25 +287,27 @@ function renderModels() {
   `;
 }
 
-function field(label, name, value = '', type = 'text', extraClass = '') {
+function field(label, name, value = '', type = 'text', extraClass = '', help = '') {
   return `
     <div class="field ${extraClass}">
       <label>${label}</label>
       <input name="${name}" type="${type}" value="${escapeHtml(value ?? '')}" />
+      ${help ? `<small>${escapeHtml(help)}</small>` : ''}
     </div>
   `;
 }
 
-function textareaField(label, name, value = '') {
+function textareaField(label, name, value = '', help = '') {
   return `
     <div class="field wide">
       <label>${label}</label>
       <textarea name="${name}">${escapeHtml(value ?? '')}</textarea>
+      ${help ? `<small>${escapeHtml(help)}</small>` : ''}
     </div>
   `;
 }
 
-function checkboxField(label, name, checked) {
+function checkboxField(label, name, checked, help = '') {
   return `
     <label class="field">
       <span>${label}</span>
@@ -303,17 +315,19 @@ function checkboxField(label, name, checked) {
         <option value="true" ${checked ? 'selected' : ''}>是</option>
         <option value="false" ${!checked ? 'selected' : ''}>否</option>
       </select>
+      ${help ? `<small>${escapeHtml(help)}</small>` : ''}
     </label>
   `;
 }
 
-function selectField(label, name, value, options) {
+function selectField(label, name, value, options, help = '') {
   return `
     <div class="field">
       <label>${label}</label>
       <select name="${name}">
         ${options.map(([optionValue, text]) => `<option value="${optionValue}" ${value === optionValue ? 'selected' : ''}>${text}</option>`).join('')}
       </select>
+      ${help ? `<small>${escapeHtml(help)}</small>` : ''}
     </div>
   `;
 }
@@ -376,14 +390,14 @@ function renderSkills() {
       <h2>${editing.id ? '编辑 Skill' : '新增 Skill'}</h2>
       <form class="inline-form" data-collection-form="agent-skills">
         <input type="hidden" name="id" value="${escapeHtml(editing.id || '')}" />
-        ${field('Skill 名称', 'label', editing.label)}
-        ${field('Skill key', 'key', editing.key)}
-        ${textareaField('能力说明', 'description', editing.description)}
-        ${field('执行顺序', 'order', editing.order ?? 100, 'number')}
-        ${selectField('失败策略', 'failurePolicy', editing.failurePolicy || 'fail_closed', [['fail_closed', 'fail_closed'], ['skip_optional', 'skip_optional']])}
-        ${checkboxField('必需', 'required', editing.required === true)}
-        ${checkboxField('启用', 'enabled', editing.enabled !== false)}
-        ${textareaField('备注', 'notes', editing.notes)}
+        ${field('Skill 名称', 'label', editing.label, 'text', '', '给同事看的名称，例如“全球语言翻译”“回复真人感润色”。')}
+        ${field('Skill key', 'key', editing.key, 'text', '', '系统内部识别码，必须唯一，建议英文小写加下划线，例如 human_tone_polish。')}
+        ${textareaField('能力说明', 'description', editing.description, '说明这个 skill 负责什么，不负责什么，方便审核规则边界。')}
+        ${field('执行顺序', 'order', editing.order ?? 100, 'number', '', '数字越小越先执行；翻译/识别一般靠前，安全复查一般靠后。')}
+        ${selectField('失败策略', 'failurePolicy', editing.failurePolicy || 'fail_closed', [['fail_closed', '失败就拦截'], ['skip_optional', '失败就跳过']], '关键能力建议选择“失败就拦截”；可选润色类能力可以选择“失败就跳过”。')}
+        ${checkboxField('必需', 'required', editing.required === true, '必需 skill 失败会影响整封邮件处理，适合风险、安全、翻译等核心能力。')}
+        ${checkboxField('启用', 'enabled', editing.enabled !== false, '停用后不会进入当前 AI 处理链路。')}
+        ${textareaField('备注', 'notes', editing.notes, '写给内部审核人员看的补充边界，例如哪些场景必须转人工。')}
         <button type="submit">${editing.id ? '保存 Skill' : '新增 Skill'}</button>
         ${editing.id ? '<button class="secondary" type="button" data-cancel-edit>取消编辑</button>' : ''}
       </form>
@@ -663,6 +677,8 @@ function bindContentEvents() {
       const item = findItem(collection, button.dataset.id);
       state.editing = { collection, item };
       render();
+      contentEl.querySelector('[data-collection-form]')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      notify({ type: 'info', title: '已打开编辑表单', message: '请在下方表单修改后保存。' });
     });
   });
 
@@ -670,20 +686,53 @@ function bindContentEvents() {
     button.addEventListener('click', async () => {
       const collection = button.dataset.toggle;
       const item = findItem(collection, button.dataset.id);
-      await saveCollectionItem(collection, { ...item, enabled: item.enabled === false });
+      try {
+        await saveCollectionItem(collection, { ...item, enabled: item.enabled === false });
+        notify({
+          type: 'success',
+          title: item.enabled === false ? '已启用' : '已停用',
+          message: item.name || item.label || item.key || '配置状态已更新。',
+        });
+      } catch (error) {
+        state.error = error.message;
+        render();
+        notify({ type: 'danger', title: '启停失败', message: error.message });
+      }
     });
   });
 
   contentEl.querySelectorAll('[data-delete]').forEach((button) => {
     button.addEventListener('click', async () => {
-      await deleteCollectionItem(button.dataset.delete, button.dataset.id);
+      const item = findItem(button.dataset.delete, button.dataset.id);
+      const label = item.name || item.label || item.key || '这条配置';
+      if (!window.confirm(`确定删除“${label}”吗？删除后需要重新新增才能恢复。`)) return;
+      try {
+        await deleteCollectionItem(button.dataset.delete, button.dataset.id);
+        notify({ type: 'success', title: '已删除', message: label });
+      } catch (error) {
+        state.error = error.message;
+        render();
+        notify({ type: 'danger', title: '删除失败', message: error.message });
+      }
     });
   });
 
   contentEl.querySelectorAll('[data-collection-form]').forEach((form) => {
     form.addEventListener('submit', async (event) => {
       event.preventDefault();
-      await saveCollectionItem(form.dataset.collectionForm, formPayload(form));
+      const payload = formPayload(form);
+      try {
+        await saveCollectionItem(form.dataset.collectionForm, payload);
+        notify({
+          type: 'success',
+          title: payload.id ? '配置已保存' : '配置已新增',
+          message: payload.name || payload.label || payload.key || '配置已更新。',
+        });
+      } catch (error) {
+        state.error = error.message;
+        render();
+        notify({ type: 'danger', title: '保存失败', message: error.message });
+      }
     });
   });
 
@@ -713,6 +762,11 @@ function bindContentEvents() {
         };
         state.status = state.providerTests[providerId].message;
         state.error = '';
+        notify({
+          type: ok ? 'success' : 'warn',
+          title: ok ? '测试连接成功' : '测试连接需要处理',
+          message: state.providerTests[providerId].message,
+        });
       } catch (error) {
         state.providerTests[providerId] = {
           loading: false,
@@ -720,6 +774,7 @@ function bindContentEvents() {
           message: `连接检测失败：${error.message}`,
         };
         state.error = state.providerTests[providerId].message;
+        notify({ type: 'danger', title: '测试连接失败', message: error.message });
       }
       render();
     });
@@ -736,22 +791,37 @@ function bindContentEvents() {
       }),
     });
     state.status = '草稿版本已创建。';
+    notify({ type: 'success', title: '草稿版本已创建', message: String(form.get('versionName') || '新版本') });
     await loadVersions();
   });
 
   contentEl.querySelectorAll('[data-publish-version]').forEach((button) => {
     button.addEventListener('click', async () => {
-      await api(`/api/admin/email-ai-control/versions/${button.dataset.publishVersion}/publish`, { method: 'POST', body: '{}' });
-      state.status = '版本已发布。';
-      await loadVersions();
+      try {
+        await api(`/api/admin/email-ai-control/versions/${button.dataset.publishVersion}/publish`, { method: 'POST', body: '{}' });
+        state.status = '版本已发布。';
+        notify({ type: 'success', title: '版本已发布', message: '前台工作台会读取当前 published 版本。' });
+        await loadVersions();
+      } catch (error) {
+        state.error = error.message;
+        render();
+        notify({ type: 'danger', title: '发布失败', message: error.message });
+      }
     });
   });
 
   contentEl.querySelectorAll('[data-rollback-version]').forEach((button) => {
     button.addEventListener('click', async () => {
-      await api(`/api/admin/email-ai-control/versions/${button.dataset.rollbackVersion}/rollback`, { method: 'POST', body: '{}' });
-      state.status = '已回滚到指定版本。';
-      await loadVersions();
+      try {
+        await api(`/api/admin/email-ai-control/versions/${button.dataset.rollbackVersion}/rollback`, { method: 'POST', body: '{}' });
+        state.status = '已回滚到指定版本。';
+        notify({ type: 'success', title: '已回滚版本', message: '当前 published 版本已更新。' });
+        await loadVersions();
+      } catch (error) {
+        state.error = error.message;
+        render();
+        notify({ type: 'danger', title: '回滚失败', message: error.message });
+      }
     });
   });
 
@@ -767,6 +837,11 @@ function bindContentEvents() {
     state.testOutput = result;
     state.status = '本地测试已完成。';
     state.error = '';
+    notify({
+      type: result.status === 'failed' || result.ok === false ? 'danger' : 'success',
+      title: '本地测试已完成',
+      message: result.status === 'failed' ? (result.errorMessage || '测试未通过。') : '测试结果已显示在下方。',
+    });
     await loadControlCenter({ silent: true });
     if (state.activeTab === 'test') render();
   });

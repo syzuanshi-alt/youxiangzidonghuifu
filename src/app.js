@@ -153,14 +153,15 @@ const loopStatusText = {
 const processingStatusText = {
   pending: '待处理',
   urgent: '需紧急处理',
-  completed: '已完成',
+  completed: '已处理',
 };
 
 const FEISHU_WORKBENCH_PAGE_SIZE = 20;
 const FEISHU_WORKBENCH_POLL_INTERVAL_MS = readWorkbenchPollIntervalMs(60_000);
 const MAIL_NOTIFICATION_TTL_MS = 9_000;
-const WORKBENCH_METRIC_ORDER = ['urgent', 'pending', 'completed', 'spam', 'all'];
-const WORKBENCH_REMEMBERED_PHONE_KEY = 'email-auto-reply-workbench-remembered-phone';
+const WORKBENCH_METRIC_ORDER = ['all', 'pending', 'completed', 'spam'];
+const WORKBENCH_REMEMBERED_ACCOUNT_KEY = 'email-auto-reply-workbench-remembered-account';
+const WORKBENCH_LEGACY_REMEMBERED_PHONE_KEY = 'email-auto-reply-workbench-remembered-phone';
 const WORKBENCH_RISK_SNAPSHOTS_KEY = 'feishu-mail-risk-snapshots';
 const EMAIL_AI_SYSTEM_TABS = ['models', 'skills', 'versions', 'test'];
 const EMAIL_AI_RULE_TABS = ['risk', 'spam', 'knowledge', 'prompts', 'safety'];
@@ -235,6 +236,7 @@ function readWorkbenchPollIntervalMs(defaultValue) {
 async function processMailWithEmailAI(mail) {
   const response = await fetch(apiUrl('/api/email-ai/process'), {
     method: 'POST',
+    credentials: 'include',
     headers: { 'content-type': 'application/json' },
     body: JSON.stringify({
       emailId: mail.id || mail.messageId,
@@ -243,6 +245,9 @@ async function processMailWithEmailAI(mail) {
       body: mail.bodyText || mail.summary || '',
       bodyText: mail.bodyText || '',
       summary: mail.summary || '',
+      processingStatus: mail.processingStatus || null,
+      risk: mail.risk || mail.riskLevel || '',
+      finalAction: mail.finalAction || mail.action || '',
       orderInfo: mail.orderInfo || {},
       customerHistory: mail.customerHistory || {},
       source: 'email_auto_reply_workbench',
@@ -256,11 +261,39 @@ async function processMailWithEmailAI(mail) {
   return response.json();
 }
 
+function shouldSkipEmailAIForMail(mail = {}) {
+  const processingStatus = getWorkbenchProcessingStatus(mail);
+  const localClassified = classifyMail(mail);
+  const riskState = getMailRiskState({
+    ...mail,
+    ...localClassified,
+    processingStatus: mail.processingStatus,
+  });
+  const action = mail.processingStatus?.action || mail.processingStatus?.lastAction || '';
+
+  return processingStatus.completed
+    || processingStatus.ignored
+    || ['send', 'sent', 'auto_send', 'manual_send', 'archive', 'archived', 'manual_archive', 'auto_archive'].includes(action)
+    || riskState.spam
+    || mail.noReplyRequired === true
+    || mail.skipAiProcessing === true;
+}
+
 async function processMailsWithEmailAI(rawMails) {
   try {
     return await Promise.all(rawMails.map(async (mail) => ({
       ...mail,
-      aiResult: await processMailWithEmailAI(mail),
+      ...(shouldSkipEmailAIForMail(mail)
+        ? {
+          aiResult: {
+            success: true,
+            skipped: true,
+            source: 'workbench_skip_processed',
+            finalAction: 'skipped',
+            reason: '邮件已处理、已归档或无需处理，跳过 AI 处理以节省 token。',
+          },
+        }
+        : { aiResult: await processMailWithEmailAI(mail) }),
     })));
   } catch (error) {
     apiState = {
@@ -340,19 +373,18 @@ let mailboxSearchQuery = '';
 let mailboxContactPanelOpen = false;
 let mailboxListPanelOpen = false;
 let mailboxOpenSections = {
-  urgent: true,
-  inbox: true,
-  favorite: false,
-  sent: false,
-  archived: false,
-  deleted: false,
+  all: true,
+  pending: true,
+  completed: false,
   spam: false,
 };
 let overviewOpen = true;
 let loginMode = 'login';
 let loginStatus = '';
 let loginError = '';
-let loginDraftPhone = localStorage.getItem(WORKBENCH_REMEMBERED_PHONE_KEY) || '';
+let loginDraftAccount = localStorage.getItem(WORKBENCH_REMEMBERED_ACCOUNT_KEY)
+  || localStorage.getItem(WORKBENCH_LEGACY_REMEMBERED_PHONE_KEY)
+  || '';
 let accountPasswordStatus = '';
 let accountPasswordError = '';
 let accountPasswordChecking = false;
@@ -419,6 +451,7 @@ const settingsBackdropEl = document.querySelector('[data-settings-backdrop]');
 const settingsPrimaryNavEl = document.querySelector('[data-settings-primary-nav]');
 const settingsEmptyEl = document.querySelector('[data-settings-empty]');
 const mailToastStackEl = document.querySelector('[data-mail-toast-stack]');
+const actionNoticeStackEl = document.querySelector('[data-action-notice-stack]');
 
 const defaultApiState = {
   apiProxyAvailable: false,
@@ -615,21 +648,42 @@ function normalizePhone(value = '') {
   return digits;
 }
 
-function isValidPhone(phone = '') {
-  return /^\d{6,20}$/.test(normalizePhone(phone));
+function normalizeWorkbenchAccount(value = '') {
+  const rawText = String(value || '').trim();
+  const phoneLike = normalizePhone(rawText);
+  if (/^\+?[\d\s().-]+$/.test(rawText) && phoneLike.length >= 6) {
+    return phoneLike;
+  }
+  return rawText.toLowerCase();
 }
 
-function maskPhone(phone = '') {
-  const normalized = normalizePhone(phone);
-  if (normalized.length <= 7) return normalized;
-  return `${normalized.slice(0, 3)}****${normalized.slice(-4)}`;
+function isValidWorkbenchAccount(account = '') {
+  const normalized = normalizeWorkbenchAccount(account);
+  return normalized.length >= 3
+    && normalized.length <= 64
+    && /^[a-z0-9._@+-]+$/.test(normalized);
 }
 
-function saveRememberedPhone(phone, rememberAccount) {
+function maskWorkbenchAccount(account = '') {
+  const normalized = normalizeWorkbenchAccount(account);
+  if (/^\d{6,20}$/.test(normalized) && normalized.length > 7) {
+    return `${normalized.slice(0, 3)}****${normalized.slice(-4)}`;
+  }
+  if (normalized.includes('@')) {
+    const [name, domain] = normalized.split('@');
+    return `${name.length > 2 ? `${name.slice(0, 2)}***` : name}@${
+      domain || ''
+    }`;
+  }
+  return normalized;
+}
+
+function saveRememberedAccount(account, rememberAccount) {
   if (rememberAccount) {
-    localStorage.setItem(WORKBENCH_REMEMBERED_PHONE_KEY, normalizePhone(phone));
+    localStorage.setItem(WORKBENCH_REMEMBERED_ACCOUNT_KEY, normalizeWorkbenchAccount(account));
   } else {
-    localStorage.removeItem(WORKBENCH_REMEMBERED_PHONE_KEY);
+    localStorage.removeItem(WORKBENCH_REMEMBERED_ACCOUNT_KEY);
+    localStorage.removeItem(WORKBENCH_LEGACY_REMEMBERED_PHONE_KEY);
   }
 }
 
@@ -637,8 +691,19 @@ function clearWorkbenchUser() {
   currentWorkbenchUser = null;
 }
 
+function clearMailboxData() {
+  feishuMessages = [];
+  mails = [];
+  selectedId = '';
+  mailNotificationBaselineReady = false;
+  mailSoundBaselineReady = false;
+  knownMailNotificationIds = new Set();
+  knownMailSoundIds = new Set();
+}
+
 function setWorkbenchUser(user = {}) {
   currentWorkbenchUser = {
+    account: user.account || user.phone || '',
     phone: user.phone || '',
     loginAt: user.lastLoginAt || user.loginAt || new Date().toISOString(),
   };
@@ -751,14 +816,16 @@ function renderLoginGate() {
   document.body.classList.toggle('login-mode', !loggedIn);
 
   if (workbenchUserEl) {
-    workbenchUserEl.textContent = loggedIn ? `已登录：${maskPhone(currentWorkbenchUser.phone)}` : '';
+    workbenchUserEl.textContent = loggedIn ? `已登录：${maskWorkbenchAccount(currentWorkbenchUser.account || currentWorkbenchUser.phone)}` : '';
   }
 
   if (loggedIn) return;
 
   const isCreate = loginMode === 'create';
   const isReset = loginMode === 'reset';
-  const rememberedPhone = localStorage.getItem(WORKBENCH_REMEMBERED_PHONE_KEY) || '';
+  const rememberedAccount = localStorage.getItem(WORKBENCH_REMEMBERED_ACCOUNT_KEY)
+    || localStorage.getItem(WORKBENCH_LEGACY_REMEMBERED_PHONE_KEY)
+    || '';
   const captchaBlock = captchaConfig.required
     ? `
       <section class="login-human-check" data-workbench-captcha>
@@ -774,7 +841,7 @@ function renderLoginGate() {
     <div class="login-heading">
       <span>邮件自动回复工作台</span>
       <h1>${isCreate ? '创建工作台账号' : isReset ? '重置工作台密码' : '登录工作台'}</h1>
-      <p>${isReset ? '输入手机号、新密码和管理员提供的重置码。' : '使用手机号和密码登录。密码由浏览器密码管理器保存，工作台不会明文保存。'}</p>
+      <p>${isReset ? '输入账号、新密码和管理员提供的重置码。' : '使用账号和密码登录。账号可用邮箱、字母数字组合或原手机号；密码由浏览器密码管理器保存。'}</p>
     </div>
 
     <div class="login-mode-tabs">
@@ -785,8 +852,8 @@ function renderLoginGate() {
 
     <form class="login-form" data-workbench-login-form>
       <label>
-        <span>手机号</span>
-        <input name="phone" inputmode="tel" autocomplete="username tel" value="${escapeHtml(loginDraftPhone || rememberedPhone)}" placeholder="请输入手机号" />
+        <span>账号</span>
+        <input name="account" autocomplete="username" value="${escapeHtml(loginDraftAccount || rememberedAccount)}" placeholder="邮箱、字母数字账号或原手机号" />
       </label>
 
       <label>
@@ -811,7 +878,7 @@ function renderLoginGate() {
       ${captchaBlock}
 
       <label class="inline-check login-check">
-        <input name="rememberAccount" type="checkbox" ${rememberedPhone ? 'checked' : ''} />
+        <input name="rememberAccount" type="checkbox" ${rememberedAccount ? 'checked' : ''} />
         <span>记住账号</span>
       </label>
 
@@ -838,13 +905,13 @@ function renderLoginGate() {
   loginCardEl.querySelector('[data-workbench-login-form]')?.addEventListener('submit', async (event) => {
     event.preventDefault();
     const formData = new FormData(event.currentTarget);
-    const phone = normalizePhone(formData.get('phone'));
+    const account = normalizeWorkbenchAccount(formData.get('account'));
     const password = String(formData.get('password') || '');
     const rememberAccount = Boolean(formData.get('rememberAccount'));
-    loginDraftPhone = phone;
+    loginDraftAccount = account;
 
-    if (!isValidPhone(phone)) {
-      loginError = '请输入有效手机号。';
+    if (!isValidWorkbenchAccount(account)) {
+      loginError = '请输入有效账号。账号可使用 3-64 位邮箱、字母、数字、下划线、短横线或点号。';
       loginStatus = '';
       renderLoginGate();
       return;
@@ -873,7 +940,7 @@ function renderLoginGate() {
         {
           method: 'POST',
           body: JSON.stringify({
-            phone,
+            account,
             password,
             newPassword: password,
             inviteCode: String(formData.get('inviteCode') || '').trim(),
@@ -883,8 +950,8 @@ function renderLoginGate() {
           }),
         },
       );
-      saveRememberedPhone(phone, rememberAccount);
-      setWorkbenchUser(payload.user || { phone });
+      saveRememberedAccount(account, rememberAccount);
+      setWorkbenchUser(payload.user || { account });
       loginStatus = '';
       loginError = '';
       renderLoginGate();
@@ -928,8 +995,8 @@ async function initializeWorkbenchAuth() {
 function renderAccountSession() {
   if (!accountSessionEl) return;
 
-  const userLabel = currentWorkbenchUser?.phone
-    ? maskPhone(currentWorkbenchUser.phone)
+  const userLabel = currentWorkbenchUser?.account || currentWorkbenchUser?.phone
+    ? maskWorkbenchAccount(currentWorkbenchUser.account || currentWorkbenchUser.phone)
     : '未登录';
   const loginAt = currentWorkbenchUser?.loginAt
     ? new Date(currentWorkbenchUser.loginAt).toLocaleString('zh-CN')
@@ -1034,6 +1101,7 @@ async function logoutWorkbench() {
     credentials: 'include',
   }).catch(() => {});
   clearWorkbenchUser();
+  clearMailboxData();
   loginMode = 'login';
   loginStatus = '';
   loginError = '';
@@ -1146,6 +1214,7 @@ async function verifyEmailAIAdminToken(token = emailAIAdminToken(), { silent = f
   try {
     const response = await fetch(apiUrl('/api/admin/email-ai-control'), {
       cache: 'no-store',
+      credentials: 'include',
       headers: {
         authorization: `Bearer ${nextToken}`,
       },
@@ -1189,6 +1258,7 @@ async function verifyEmailAIAdminPassword(password = '') {
   try {
     const response = await fetch(apiUrl('/api/admin/email-ai-control/password-login'), {
       method: 'POST',
+      credentials: 'include',
       headers: { 'content-type': 'application/json' },
       body: JSON.stringify({ password: nextPassword }),
     });
@@ -1521,10 +1591,50 @@ function openAutoProcessingSwitchPanel() {
   renderSettingsShell();
 }
 
+function showActionNotice({
+  type = 'info',
+  title = '操作结果',
+  message = '',
+  timeoutMs = 5200,
+} = {}) {
+  if (!actionNoticeStackEl) {
+    if (message) console.info(`${title}: ${message}`);
+    return;
+  }
+
+  const noticeId = `notice-${Date.now()}-${Math.random().toString(16).slice(2)}`;
+  const node = document.createElement('article');
+  node.className = `action-notice is-${type}`;
+  node.dataset.actionNoticeId = noticeId;
+  node.innerHTML = `
+    <button class="action-notice-close" type="button" data-dismiss-action-notice="${escapeHtml(noticeId)}" aria-label="关闭提醒">×</button>
+    <strong>${displayText(title)}</strong>
+    ${message ? `<span>${displayText(message)}</span>` : ''}
+  `;
+  actionNoticeStackEl.prepend(node);
+
+  const dismiss = () => {
+    node.remove();
+  };
+  node.querySelector('[data-dismiss-action-notice]')?.addEventListener('click', dismiss);
+  if (timeoutMs > 0) {
+    window.setTimeout(dismiss, timeoutMs);
+  }
+}
+
+window.addEventListener('workbench:notice', (event) => {
+  showActionNotice(event.detail || {});
+});
+
 function showAutoProcessingSwitchReminder(failure) {
   openAutoProcessingSwitchPanel();
   window.setTimeout(() => {
-    alert(buildAutoProcessingSwitchReminder(failure));
+    showActionNotice({
+      type: 'warn',
+      title: '自动处理开关需要确认',
+      message: buildAutoProcessingSwitchReminder(failure),
+      timeoutMs: 9000,
+    });
   }, 0);
 }
 
@@ -1604,7 +1714,7 @@ function renderMailNotifications() {
         selectedId = mailId;
         activeFilter = 'all';
         overviewOpen = false;
-        mailboxOpenSections.inbox = true;
+        mailboxOpenSections.all = true;
         dismissMailNotification(mailNotifications.find((item) => item.mailId === mailId)?.notificationId || '');
         render();
       }
@@ -1662,7 +1772,12 @@ function maybeAlertHighRisk(mail) {
   alertedHighRiskIds.add(mail.id);
   playSoundEffect('high_risk');
   window.setTimeout(() => {
-    alert(`高风险邮件提醒：${mail.subject}\n\n${mail.reason}\n\n请人工处理，不要自动承诺退款、赔偿、改价或发货时间。`);
+    showActionNotice({
+      type: 'danger',
+      title: '高风险邮件提醒',
+      message: `${mail.subject || '(无标题)'}。请人工处理，不要自动承诺退款、赔偿、改价或发货时间。`,
+      timeoutMs: 9000,
+    });
   }, 0);
 }
 
@@ -2328,7 +2443,7 @@ function classifiedMails() {
 
   return mails.map((mail) => {
     const riskOverride = riskOverrides[mail.id] || riskOverrides[mail.messageId] || mail.riskOverride || null;
-    const baseClassified = mail.aiResult
+    const baseClassified = mail.aiResult && mail.aiResult.skipped !== true
       ? applyRiskOverrideToMail(mapEmailAIResultToWorkbenchMail(mail, mail.aiResult), riskOverride, { agentConfig })
       : applyKnowledgeCandidate(applyRiskOverrideToMail(classifyMail(mail, {
         agentConfig,
@@ -2380,9 +2495,8 @@ function buildOverviewTrendSeries({
   const labels = ['06-19', '06-20', '06-21', '06-22', '06-23', '06-24', '06-25'];
   const seriesConfig = [
     { key: 'received', label: '收到邮件', color: '#1769e0', base: totalCount },
-    { key: 'completed', label: '已完成', color: '#17a66a', base: completedCount },
+    { key: 'completed', label: '已处理', color: '#17a66a', base: completedCount },
     { key: 'spam', label: '垃圾邮件', color: '#7c4dff', base: spamCount },
-    { key: 'urgent', label: '需紧急处理', color: '#ef4444', base: urgentCount },
   ];
   const maxValue = Math.max(totalCount, pendingCount, completedCount, spamCount, urgentCount, 1);
 
@@ -2414,7 +2528,6 @@ function renderOverviewDashboard(results) {
   const completedCount = metricCount(metrics, 'completed');
   const spamCount = metricCount(metrics, 'spam');
   const apiMailCount = metricCount(metrics, 'all') || totalCount;
-  const nonUrgentPendingCount = Math.max(pendingCount - urgentCount, 0);
   const processedRate = totalCount ? Math.round((completedCount / totalCount) * 100) : 0;
   const automationBase = Math.max(pendingCount + completedCount, 1);
   const automationRate = Math.min(99, Math.round((completedCount / automationBase) * 100));
@@ -2432,10 +2545,9 @@ function renderOverviewDashboard(results) {
     minute: '2-digit',
   });
   const distributionItems = [
-    { label: '需紧急处理', value: urgentCount, color: '#ef4444' },
-    { label: '待处理', value: nonUrgentPendingCount, color: '#f59e0b' },
+    { label: '待处理', value: pendingCount, color: '#f59e0b' },
     { label: '垃圾邮件', value: spamCount, color: '#7c4dff' },
-    { label: '已完成', value: completedCount, color: '#17a66a' },
+    { label: '已处理', value: completedCount, color: '#17a66a' },
   ];
   let distributionStart = 0;
   const distributionDisplayTotal = distributionItems.reduce((sum, item) => sum + item.value, 0);
@@ -2455,12 +2567,12 @@ function renderOverviewDashboard(results) {
   });
   const headerCards = [
     {
-      key: 'urgent',
-      label: '需紧急处理',
-      value: urgentCount,
-      delta: '较昨日 ↑ 33.33%',
-      badge: '!',
-      tone: 'urgent',
+      key: 'all',
+      label: '收件箱',
+      value: apiMailCount,
+      delta: '较昨日 ↑ 18.74%',
+      badge: 'API',
+      tone: 'api',
     },
     {
       key: 'pending',
@@ -2472,7 +2584,7 @@ function renderOverviewDashboard(results) {
     },
     {
       key: 'completed',
-      label: '已完成',
+      label: '已处理',
       value: completedCount,
       delta: '较昨日 ↑ 12.45%',
       badge: '✓',
@@ -2485,14 +2597,6 @@ function renderOverviewDashboard(results) {
       delta: '较昨日 ↓ 8.21%',
       badge: '⌫',
       tone: 'spam',
-    },
-    {
-      key: 'all',
-      label: 'API邮件',
-      value: apiMailCount,
-      delta: '较昨日 ↑ 18.74%',
-      badge: 'API',
-      tone: 'api',
     },
   ];
   const aiRows = [
@@ -2670,8 +2774,8 @@ function renderOverviewDashboard(results) {
 
   overviewContentEl.querySelectorAll('[data-close-overview]').forEach((button) => {
     button.addEventListener('click', () => {
-      activeFilter = 'inbox';
-      mailboxOpenSections.inbox = true;
+      activeFilter = 'all';
+      mailboxOpenSections.all = true;
       selectedId = firstVisibleMailboxMailId(results, activeFilter) || selectedId;
       overviewOpen = false;
       render();
@@ -2756,22 +2860,25 @@ function firstVisibleMailboxMailId(results, filterKey = activeFilter) {
 
 function mailboxSectionForFilter(filterKey) {
   const normalizedFilter = normalizeWorkbenchFilter(filterKey);
-  if (normalizedFilter === 'urgent') return 'urgent';
-  if (['inbox', 'low_risk', 'medium_risk'].includes(normalizedFilter)) return 'inbox';
-  if (['favorite', 'sent', 'archived', 'deleted', 'spam'].includes(normalizedFilter)) return normalizedFilter;
-  return 'inbox';
+  if (['pending', 'high_risk', 'urgent', 'low_risk', 'medium_risk'].includes(normalizedFilter)) return 'pending';
+  if (normalizedFilter === 'completed' || ['sent', 'archived', 'deleted'].includes(normalizedFilter)) return 'completed';
+  if (normalizedFilter === 'spam') return 'spam';
+  return 'all';
 }
 
 function mailboxFilterLabel(filterKey) {
   const labels = {
+    all: '收件箱',
     inbox: '收件箱',
-    urgent: '需紧急处理',
+    pending: '待处理',
+    urgent: '待处理',
     low_risk: '低风险',
     medium_risk: '中风险',
     favorite: '收藏',
     sent: '已发送',
-    archived: '已归档',
+    archived: '已处理',
     deleted: '已删除',
+    completed: '已处理',
     spam: '垃圾邮件',
   };
   return labels[normalizeWorkbenchFilter(filterKey)] || '当前队列';
@@ -2781,14 +2888,9 @@ function renderMailboxNavigation(results) {
   if (!mailboxNavEl) return;
 
   const countKeys = [
-    'urgent',
-    'inbox',
-    'low_risk',
-    'medium_risk',
-    'favorite',
-    'sent',
-    'archived',
-    'deleted',
+    'all',
+    'pending',
+    'completed',
     'spam',
   ];
 
@@ -3395,16 +3497,25 @@ function renderMailboxSwitcher() {
     try {
       const response = await fetch(apiUrl('/api/feishu/config/update'), {
         method: 'POST',
+        credentials: 'include',
         headers: { 'content-type': 'application/json' },
         body: JSON.stringify(payload),
       });
       const result = await response.json();
-      alert(result.ok
-        ? `配置已保存${result.resetAuth ? '，请重新授权。' : '。'}`
-        : (result.message || result.error || '配置保存失败。'));
+      showActionNotice({
+        type: result.ok ? 'success' : 'danger',
+        title: result.ok ? '配置已保存' : '配置保存失败',
+        message: result.ok
+          ? (result.resetAuth ? '邮箱或应用已变更，请重新打开飞书授权入口。' : '当前账号的邮箱配置已保存。')
+          : (result.message || result.error || '配置保存失败。'),
+      });
       loadFeishuApiMessages({ preserveSelection: true });
     } catch (error) {
-      alert(`配置保存失败：${error.message}`);
+      showActionNotice({
+        type: 'danger',
+        title: '配置保存失败',
+        message: error.message,
+      });
     }
   });
 }
@@ -3438,8 +3549,8 @@ function renderList(results) {
     `;
     targetListEl.querySelector('[data-reset-filter]')?.addEventListener('click', () => {
       mailboxSearchQuery = '';
-      activeFilter = 'inbox';
-      mailboxOpenSections.inbox = true;
+      activeFilter = 'all';
+      mailboxOpenSections.all = true;
       settingsOpen = false;
       closeEmailRuleControl();
       selectedId = firstVisibleMailboxMailId(results, activeFilter) || selectedId;
@@ -3488,8 +3599,8 @@ function renderDetail(results) {
     `;
     detailEl.querySelector('[data-reset-filter]')?.addEventListener('click', () => {
       mailboxSearchQuery = '';
-      activeFilter = 'inbox';
-      mailboxOpenSections.inbox = true;
+      activeFilter = 'all';
+      mailboxOpenSections.all = true;
       settingsOpen = false;
       closeEmailRuleControl();
       selectedId = firstVisibleMailboxMailId(classifiedMails(), activeFilter) || selectedId;
@@ -3571,9 +3682,17 @@ function updateManualArchiveSelection(mail, checked) {
     };
     saveWriteActionResults();
     playSoundEffects(soundEffectsForActionResult(confirmation.result));
-    alert(confirmation.result.message);
+    showActionNotice({
+      type: confirmation.result.ok ? 'success' : 'warn',
+      title: '手动归档已记录',
+      message: confirmation.result.message,
+    });
   } else {
-    alert('已取消手动归档设置。');
+    showActionNotice({
+      type: 'info',
+      title: '手动归档已取消',
+      message: '这封邮件已恢复到原处理状态。',
+    });
   }
   render();
 }
@@ -3588,7 +3707,11 @@ function markLocalManualArchive(mail) {
   };
   saveWriteActionResults();
   playSoundEffects(soundEffectsForActionResult(result));
-  alert(result.message);
+  showActionNotice({
+    type: result.ok ? 'success' : 'warn',
+    title: '手动归档已记录',
+    message: result.message,
+  });
   render();
 }
 
@@ -3606,12 +3729,12 @@ function saveReplyComposerSelection(mail, { silent = false } = {}) {
   const { candidateId, content } = readReplyComposer(mail);
 
   if (!candidateId && !riskState.spam) {
-    alert('请先选择一条回复内容。');
+    showActionNotice({ type: 'warn', title: '请选择回复内容', message: '发送或保存前需要先选择一条候选回复。' });
     return null;
   }
 
   if (!content && !riskState.spam) {
-    alert('回复正文不能为空。');
+    showActionNotice({ type: 'warn', title: '回复正文不能为空', message: '请补充回复正文后再继续。' });
     return null;
   }
 
@@ -3628,7 +3751,7 @@ function saveReplyComposerSelection(mail, { silent = false } = {}) {
   }
 
   if (!silent) {
-    alert('已保存当前回复内容。');
+    showActionNotice({ type: 'success', title: '回复内容已保存', message: '当前编辑内容已保存到这封邮件。' });
   }
 
   return { candidateId, content };
@@ -3662,7 +3785,7 @@ function wireReplyComposer(mail) {
     });
     saveReviews();
     syncApproval(mail, reviews[mail.id]);
-    alert('已审核通过并保存当前回复。');
+    showActionNotice({ type: 'success', title: '审核已通过', message: '已保存当前回复，真实发送前服务端仍会再次校验。' });
     render();
   });
 
@@ -3697,6 +3820,7 @@ async function syncApproval(mail, review) {
   try {
     await fetch(apiUrl('/api/feishu/mail/actions/approve'), {
       method: 'POST',
+      credentials: 'include',
       headers: { 'content-type': 'application/json' },
       body: JSON.stringify({
         mail,
@@ -3714,6 +3838,7 @@ async function syncRiskOverride(mail, override, { clear = false } = {}) {
 
   await fetch(apiUrl('/api/feishu/mail/risk-overrides'), {
     method: 'POST',
+    credentials: 'include',
     headers: { 'content-type': 'application/json' },
     body: JSON.stringify({
       mailId: mail.id,
@@ -3767,6 +3892,7 @@ async function performRealAction(action, mail, contentOverride = null) {
   try {
     const response = await fetch(apiUrl(endpoint), {
       method: 'POST',
+      credentials: 'include',
       headers: { 'content-type': 'application/json' },
       body: JSON.stringify({
         mail,
@@ -3809,7 +3935,11 @@ async function performRealAction(action, mail, contentOverride = null) {
         message,
       });
     } else {
-      alert(message);
+      showActionNotice({
+        type: payload.ok ? 'success' : 'danger',
+        title: payload.ok ? (action === 'archive' ? '归档已完成' : '真实发送已完成') : '真实动作未完成',
+        message,
+      });
     }
     render();
   } catch (error) {
@@ -3829,7 +3959,11 @@ async function performRealAction(action, mail, contentOverride = null) {
       action,
       mode: 'request_failed',
     }));
-    alert(`真实动作失败：${error.message}`);
+    showActionNotice({
+      type: 'danger',
+      title: action === 'archive' ? '归档失败' : '真实发送失败',
+      message: error.message,
+    });
     render();
   }
 }
@@ -3859,6 +3993,7 @@ async function runClosedLoopProcess(results) {
   try {
     const response = await fetch(apiUrl('/api/feishu/mail/actions/process'), {
       method: 'POST',
+      credentials: 'include',
       headers: { 'content-type': 'application/json' },
       body: JSON.stringify({
         mails: results.map(buildProcessMailPayload),
@@ -3886,9 +4021,13 @@ async function runClosedLoopProcess(results) {
     if (switchFailure) {
       showAutoProcessingSwitchReminder(switchFailure);
     } else {
-      alert(payload.ok
-        ? `自动处理完成：自动发送 ${payload.summary?.autoSent || 0}，归档 ${payload.summary?.archived || 0}，待审批 ${payload.summary?.pendingReview || 0}。`
-        : (payload.message || payload.error || '自动处理未完成。'));
+      showActionNotice({
+        type: payload.ok ? 'success' : 'danger',
+        title: payload.ok ? '自动处理完成' : '自动处理未完成',
+        message: payload.ok
+          ? `自动发送 ${payload.summary?.autoSent || 0}，归档 ${payload.summary?.archived || 0}，待审批 ${payload.summary?.pendingReview || 0}。`
+          : (payload.message || payload.error || '自动处理未完成。'),
+      });
     }
     render();
   } catch (error) {
@@ -3911,7 +4050,11 @@ async function runClosedLoopProcess(results) {
     };
     saveClosedLoopResult();
     playSoundEffect('action_failed');
-    alert(`自动处理失败：${error.message}`);
+    showActionNotice({
+      type: 'danger',
+      title: '自动处理失败',
+      message: error.message,
+    });
     render();
   }
 }
@@ -3950,7 +4093,7 @@ async function loadEmailAIStatus() {
   renderEmailAISettingsStatus();
 
   try {
-    const response = await fetch(apiUrl('/api/email-ai/status'), { cache: 'no-store' });
+    const response = await fetch(apiUrl('/api/email-ai/status'), { cache: 'no-store', credentials: 'include' });
     const payload = await response.json();
     if (!response.ok || payload.ok === false) {
       throw new Error(payload.message || payload.error || 'AI 状态读取失败。');
@@ -4011,7 +4154,7 @@ async function loadFeishuApiMessages({ preserveSelection = false } = {}) {
   isLoadingFeishuApiMessages = true;
 
   try {
-    const statusResponse = await fetch(apiUrl('/api/feishu/status'), { cache: 'no-store' });
+    const statusResponse = await fetch(apiUrl('/api/feishu/status'), { cache: 'no-store', credentials: 'include' });
 
     if (!statusResponse.ok) {
       throw new Error('本地飞书 API 代理未连接。');
@@ -4028,6 +4171,27 @@ async function loadFeishuApiMessages({ preserveSelection = false } = {}) {
       note: statusPayload.note || '本地 API 代理可用。',
     };
 
+    if (statusPayload.mailboxBound === false) {
+      clearMailboxData();
+      apiState = {
+        ...apiState,
+        configured: false,
+        messagesLoaded: false,
+        fetchedCount: 0,
+        sourceStatus: '邮箱未绑定',
+        statusText: '当前账号未绑定邮箱',
+        note: statusPayload.message || '请先在设置里的“邮箱与报告机器人”绑定飞书邮箱并完成授权。',
+      };
+      showActionNotice({
+        type: 'warn',
+        title: '请先绑定邮箱',
+        message: '新账号需要先绑定飞书邮箱，绑定后才会显示邮件并执行自动处理。',
+        timeoutMs: 8000,
+      });
+      render();
+      return;
+    }
+
     if (!statusPayload.configured) {
       render();
       return;
@@ -4035,7 +4199,7 @@ async function loadFeishuApiMessages({ preserveSelection = false } = {}) {
 
     const messagesResponse = await fetch(
       apiUrl(`/api/feishu/mail/messages?all=true&page_size=${FEISHU_WORKBENCH_PAGE_SIZE}`),
-      { cache: 'no-store' },
+      { cache: 'no-store', credentials: 'include' },
     );
     const messagesPayload = await messagesResponse.json();
 
@@ -4144,7 +4308,11 @@ document.querySelector('[data-export-reviews]').addEventListener('click', () => 
     : '暂无审核标记。';
 
   navigator.clipboard?.writeText(text);
-  alert(text);
+  showActionNotice({
+    type: 'success',
+    title: '审核清单已生成',
+    message: exportItems.length ? '审核清单已复制到剪贴板。' : '当前暂无审核标记。',
+  });
 });
 
 document.querySelectorAll('[data-open-settings]').forEach((button) => {

@@ -754,6 +754,74 @@ textarea {
   font-weight: 700;
 }
 
+.action-notice-stack {
+  position: fixed;
+  right: 20px;
+  bottom: 20px;
+  z-index: 90;
+  display: grid;
+  gap: 10px;
+  width: min(380px, calc(100vw - 32px));
+  pointer-events: none;
+}
+
+.mail-toast-stack:not(:empty) + .action-notice-stack {
+  bottom: 136px;
+}
+
+.action-notice {
+  position: relative;
+  display: grid;
+  gap: 6px;
+  padding: 14px 42px 14px 16px;
+  border: 1px solid rgba(36, 104, 184, 0.62);
+  border-left: 5px solid var(--blue);
+  border-radius: 8px;
+  background: linear-gradient(160deg, rgba(7, 24, 48, 0.98), rgba(4, 15, 31, 0.98));
+  color: #d8e8ff;
+  box-shadow: 0 18px 48px rgba(0, 0, 0, 0.34);
+  pointer-events: auto;
+}
+
+.action-notice strong,
+.action-notice span {
+  overflow-wrap: anywhere;
+}
+
+.action-notice span {
+  color: #a9c5e5;
+  line-height: 1.5;
+}
+
+.action-notice.is-success {
+  border-left-color: var(--green);
+}
+
+.action-notice.is-warn {
+  border-left-color: var(--amber);
+}
+
+.action-notice.is-danger {
+  border-left-color: var(--red);
+}
+
+.action-notice-close {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  width: 28px;
+  height: 28px;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: inherit;
+  cursor: pointer;
+}
+
+.action-notice-close:hover {
+  background: rgba(42, 111, 214, 0.18);
+}
+
 .mail-toast.is-low {
   border-left-color: var(--green);
 }

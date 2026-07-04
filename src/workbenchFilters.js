@@ -5,11 +5,10 @@ import {
 } from './processingStatus.js';
 
 export const WORKBENCH_FILTERS = [
-  { key: 'all', label: '全部邮件', tone: '' },
+  { key: 'all', label: '收件箱', tone: '', note: '全部 API 邮件' },
   { key: 'pending', label: '待处理', tone: 'metric-pending', note: '未完成' },
-  { key: 'urgent', label: '需紧急处理', tone: 'metric-urgent', note: '高风险优先' },
-  { key: 'completed', label: '已完成', tone: 'metric-completed', note: '已回复/归档' },
-  { key: 'spam', label: '垃圾邮件', tone: 'metric-spam', note: '自动归档' },
+  { key: 'completed', label: '已处理', tone: 'metric-completed', note: '已回复/已归档' },
+  { key: 'spam', label: '垃圾邮件', tone: 'metric-spam', note: '无需处理' },
 ];
 
 const EXTRA_WORKBENCH_FILTER_KEYS = [
@@ -29,7 +28,9 @@ const EXTRA_WORKBENCH_FILTER_KEYS = [
 ];
 
 const WORKBENCH_FILTER_ALIASES = {
-  high_risk: 'urgent',
+  high_risk: 'pending',
+  urgent: 'pending',
+  inbox: 'all',
 };
 
 export function normalizeWorkbenchFilter(filterKey) {
@@ -145,7 +146,7 @@ export function filterWorkbenchMails(results, filterKey, { reviews = {} } = {}) 
 
     if (normalizedFilter === 'all') return true;
     if (normalizedFilter === 'pending') return !completed && !ignored;
-    if (normalizedFilter === 'inbox') return !completed && !urgent && !riskState.spam;
+    if (normalizedFilter === 'inbox') return true;
     if (normalizedFilter === 'urgent') return urgent;
     if (normalizedFilter === 'completed') return completed;
     if (normalizedFilter === 'low_risk') return !completed && riskState.risk === 'low';

@@ -6,6 +6,7 @@ import { fileURLToPath } from 'node:url';
 
 import { loadLocalEnv } from './envLoader.mjs';
 import { createWorkbenchAuthStore } from './workbenchAuthStore.mjs';
+import { createWorkbenchTenantStore } from './workbenchTenantStore.mjs';
 import {
   buildWorkbenchCaptchaConfig,
   verifyWorkbenchCaptcha,
@@ -422,6 +423,9 @@ async function refreshUserAccessToken({
 
   await updateLocalEnvValues(envPath, updates);
   Object.assign(env, updates);
+  if (typeof envInfo.onTokenUpdates === 'function') {
+    await envInfo.onTokenUpdates(updates);
+  }
 
   return token;
 }
@@ -623,8 +627,24 @@ function normalizeWorkbenchPhone(value = '') {
   return digits;
 }
 
-function isValidWorkbenchPhone(value = '') {
-  return /^\d{6,20}$/.test(normalizeWorkbenchPhone(value));
+function normalizeWorkbenchAccount(value = '') {
+  const rawText = String(value || '').trim();
+  const phoneLike = normalizeWorkbenchPhone(rawText);
+  if (/^\+?[\d\s().-]+$/.test(rawText) && phoneLike.length >= 6) {
+    return phoneLike;
+  }
+  return rawText.toLowerCase();
+}
+
+function readWorkbenchAccount(body = {}) {
+  return normalizeWorkbenchAccount(body.account || body.phone || '');
+}
+
+function isValidWorkbenchAccount(value = '') {
+  const normalized = normalizeWorkbenchAccount(value);
+  return normalized.length >= 3
+    && normalized.length <= 64
+    && /^[a-z0-9._@+-]+$/.test(normalized);
 }
 
 function unauthorizedWorkbenchPayload(message = '请先登录工作台。') {
@@ -661,6 +681,51 @@ function sanitizeBotMessageResult(payload) {
     ok: true,
     messageId: payload?.data?.message_id || payload?.message_id || null,
     chatId: payload?.data?.chat_id || payload?.chat_id || null,
+  };
+}
+
+function shouldSkipEmailAIProcess(body = {}) {
+  const mail = body.mail || body.email || body;
+  const processingStatus = mail.processingStatus || body.processingStatus || {};
+  const action = processingStatus.action || processingStatus.lastAction || body.action || '';
+  const risk = String(mail.risk || body.risk || body.riskLevel || '').toLowerCase();
+  const finalAction = String(body.finalAction || mail.finalAction || '').toLowerCase();
+
+  return isCompletedProcessingStatus(processingStatus)
+    || ['send', 'sent', 'auto_send', 'manual_send', 'archive', 'archived', 'manual_archive', 'auto_archive'].includes(action)
+    || risk === 'spam'
+    || ['ignore_spam', 'skipped'].includes(finalAction)
+    || mail.noReplyRequired === true
+    || body.skipAiProcessing === true;
+}
+
+function buildSkippedEmailAIProcessPayload() {
+  return {
+    success: true,
+    skipped: true,
+    source: 'server_skip_processed',
+    finalAction: 'skipped',
+    reason: '邮件已处理、已归档或无需处理，服务端跳过 AI 调用。',
+    spam: {
+      isSpam: false,
+      confidence: 0,
+      matchedRules: [],
+    },
+    risk: {
+      level: 'low',
+      reasons: ['已处理邮件不再重复调用 AI。'],
+      matchedRules: [],
+    },
+    reply: {
+      draft: '',
+      internalSuggestion: '',
+      tone: 'internal',
+    },
+    safety: {
+      needHumanReview: false,
+      blocked: false,
+      reasons: [],
+    },
   };
 }
 
@@ -1287,6 +1352,81 @@ async function updateFeishuLocalConfig({ body, env, envInfo, rootDir }) {
   };
 }
 
+async function updateFeishuTenantConfig({
+  body,
+  env,
+  envInfo,
+  rootDir,
+  tenantStore,
+  session,
+}) {
+  if (!session) {
+    return updateFeishuLocalConfig({
+      body,
+      env,
+      envInfo,
+      rootDir,
+    });
+  }
+
+  const envPath = envInfo.path || join(rootDir, '.env.local');
+  const updates = {};
+  const previousAppId = env.FEISHU_APP_ID || '';
+  const currentTenant = await tenantStore.getTenant(session.user);
+  const previousMailbox = currentTenant.mailboxAddress || '';
+
+  if (body.appId) updates.FEISHU_APP_ID = String(body.appId).trim();
+  if (body.appSecret) updates.FEISHU_APP_SECRET = String(body.appSecret).trim();
+
+  const appChanged = updates.FEISHU_APP_ID && updates.FEISHU_APP_ID !== previousAppId;
+  const mailboxAddress = String(body.mailboxAddress || '').trim();
+  const botReportEmail = String(body.botReportEmail || '').trim();
+  const mailboxChanged = Boolean(mailboxAddress && mailboxAddress !== previousMailbox);
+  const resetAuth = Boolean(appChanged || mailboxChanged || body.resetAuth);
+
+  if (Object.keys(updates).length > 0) {
+    await updateLocalEnvValues(envPath, updates);
+    Object.assign(env, updates);
+  }
+
+  const tenantUpdated = mailboxAddress || botReportEmail || resetAuth;
+  if (tenantUpdated) {
+    await tenantStore.updateTenantConfig(session.user, {
+      mailboxAddress: mailboxAddress || previousMailbox,
+      botReportEmail,
+      resetAuth,
+    });
+  }
+
+  if (Object.keys(updates).length === 0 && !tenantUpdated) {
+    return {
+      statusCode: 400,
+      payload: {
+        ok: false,
+        action: 'config_update',
+        error: 'empty_config_update',
+        mode: 'validation_failed',
+        message: '没有可更新的配置。',
+      },
+    };
+  }
+
+  return {
+    statusCode: 200,
+    payload: {
+      ok: true,
+      action: 'config_update',
+      updatedKeys: [
+        ...Object.keys(updates).map((key) => (/SECRET|TOKEN/.test(key) ? `${key}:masked` : key)),
+        ...(tenantUpdated ? ['tenantMailbox'] : []),
+      ],
+      oauthStartUrl: '/oauth/start?state=mail-workbench',
+      resetAuth,
+      mailboxBound: Boolean(mailboxAddress || previousMailbox),
+    },
+  };
+}
+
 async function readFeishuMessages({ fetchImpl, env, searchParams }) {
   const readiness = validateFeishuApiEnv(env);
 
@@ -1861,6 +2001,10 @@ export function createFeishuApiServer({
     sessionTtlMs: readPositiveIntEnv(env.WORKBENCH_SESSION_TTL_HOURS, 8) * 60 * 60 * 1000,
     rememberTtlMs: readPositiveIntEnv(env.WORKBENCH_REMEMBER_TTL_DAYS, 30) * 24 * 60 * 60 * 1000,
   });
+  const workbenchTenantStore = createWorkbenchTenantStore({
+    rootDir: resolvedDataRoot,
+    env,
+  });
   const mailReadCache = new Map();
   const mailReadCacheTtlMs = Number(env.FEISHU_MAIL_READ_CACHE_TTL_MS || DEFAULT_MAIL_READ_CACHE_TTL_MS);
   const mailSyncEnabled = readBooleanEnv(env.FEISHU_MAIL_AUTO_SYNC_ENABLED, false);
@@ -1929,6 +2073,54 @@ export function createFeishuApiServer({
     return false;
   }
 
+  async function resolveTenantContext(request) {
+    const session = await findWorkbenchSession(request);
+    if (!session) {
+      return {
+        session: null,
+        tenant: null,
+        tenantEnv: env,
+        tenantEnvInfo: runtimeEnvInfo,
+        runtimeRoot: resolvedDataRoot,
+        mailboxBound: Boolean(env.FEISHU_USER_MAILBOX_ID),
+        cacheScope: 'global',
+      };
+    }
+
+    const context = await workbenchTenantStore.buildTenantContext(session.user);
+    const tenantEnvInfo = {
+      ...runtimeEnvInfo,
+      path: join(context.runtimeRoot, '.env.local'),
+      onTokenUpdates: (updates) => workbenchTenantStore.updateTenantTokens(session.user, updates),
+    };
+
+    return {
+      session,
+      tenant: context.tenant,
+      tenantEnv: context.tenantEnv,
+      tenantEnvInfo,
+      runtimeRoot: context.runtimeRoot,
+      mailboxBound: context.mailboxBound,
+      cacheScope: context.tenant?.userId || session.user.id || session.user.account || 'tenant',
+    };
+  }
+
+  async function requireTenantMailboxBinding(request, response) {
+    const context = await resolveTenantContext(request);
+    if (!context.session && !shouldRequireWorkbenchAuth(env)) return context;
+    if (context.mailboxBound) return context;
+
+    sendJson(response, 409, {
+      ok: false,
+      error: 'mailbox_binding_required',
+      configured: false,
+      mailboxBound: false,
+      sourceStatus: '邮箱未绑定',
+      message: '当前账号还没有绑定飞书邮箱。请先在设置里的“邮箱与报告机器人”保存邮箱并完成飞书授权。',
+    }, requestCorsHeaders(request));
+    return null;
+  }
+
   async function verifyWorkbenchHuman(request, body = {}) {
     const verification = await verifyWorkbenchCaptcha({
       env,
@@ -1974,13 +2166,13 @@ export function createFeishuApiServer({
       return;
     }
 
-    const phone = normalizeWorkbenchPhone(body.phone);
+    const account = readWorkbenchAccount(body);
     const password = String(body.password || '');
-    if (!isValidWorkbenchPhone(phone)) {
+    if (!isValidWorkbenchAccount(account)) {
       sendWorkbenchAuthJson(response, request, 400, {
         ok: false,
-        error: 'workbench_phone_invalid',
-        message: '请输入有效手机号。',
+        error: 'workbench_account_invalid',
+        message: '请输入有效账号。账号可使用 3-64 位邮箱、字母、数字、下划线、短横线或点号。',
       });
       return;
     }
@@ -2014,9 +2206,9 @@ export function createFeishuApiServer({
     }
 
     try {
-      const created = await workbenchAuthStore.createUser({ phone, password });
+      const created = await workbenchAuthStore.createUser({ account, password });
       const rememberLogin = body.rememberLogin === true || body.remember_login === true;
-      const session = await workbenchAuthStore.createSession({ phone, rememberLogin });
+      const session = await workbenchAuthStore.createSession({ account, rememberLogin });
       sendWorkbenchSession(response, request, 201, {
         ok: true,
         user: created.user,
@@ -2039,29 +2231,29 @@ export function createFeishuApiServer({
       return;
     }
 
-    const phone = normalizeWorkbenchPhone(body.phone);
+    const account = readWorkbenchAccount(body);
     const password = String(body.password || '');
-    if (!isValidWorkbenchPhone(phone) || !password) {
+    if (!isValidWorkbenchAccount(account) || !password) {
       sendWorkbenchAuthJson(response, request, 400, {
         ok: false,
         error: 'workbench_login_invalid',
-        message: '请输入手机号和密码。',
+        message: '请输入账号和密码。',
       });
       return;
     }
 
-    const verified = await workbenchAuthStore.verifyPassword(phone, password);
+    const verified = await workbenchAuthStore.verifyPassword(account, password);
     if (!verified) {
       sendWorkbenchAuthJson(response, request, 401, {
         ok: false,
         error: 'workbench_login_failed',
-        message: '手机号或密码不正确。',
+        message: '账号或密码不正确。',
       });
       return;
     }
 
     const rememberLogin = body.rememberLogin === true || body.remember_login === true;
-    const session = await workbenchAuthStore.createSession({ phone, rememberLogin });
+    const session = await workbenchAuthStore.createSession({ account, rememberLogin });
     sendWorkbenchSession(response, request, 200, {
       ok: true,
       user: session.user,
@@ -2077,13 +2269,13 @@ export function createFeishuApiServer({
       return;
     }
 
-    const phone = normalizeWorkbenchPhone(body.phone);
+    const account = readWorkbenchAccount(body);
     const newPassword = String(body.newPassword || body.new_password || '');
-    if (!isValidWorkbenchPhone(phone)) {
+    if (!isValidWorkbenchAccount(account)) {
       sendWorkbenchAuthJson(response, request, 400, {
         ok: false,
-        error: 'workbench_phone_invalid',
-        message: '请输入有效手机号。',
+        error: 'workbench_account_invalid',
+        message: '请输入有效账号。',
       });
       return;
     }
@@ -2115,19 +2307,19 @@ export function createFeishuApiServer({
       return;
     }
 
-    const existingUser = await workbenchAuthStore.findUserByPhone(phone);
+    const existingUser = await workbenchAuthStore.findUserByAccount(account);
     if (!existingUser) {
       sendWorkbenchAuthJson(response, request, 404, {
         ok: false,
         error: 'workbench_account_not_found',
-        message: '未找到这个手机号对应的工作台账号。',
+        message: '未找到这个账号对应的工作台账号。',
       });
       return;
     }
 
-    const updated = await workbenchAuthStore.updatePassword({ phone, newPassword });
+    const updated = await workbenchAuthStore.updatePassword({ account, newPassword });
     const rememberLogin = body.rememberLogin === true || body.remember_login === true;
-    const session = await workbenchAuthStore.createSession({ phone, rememberLogin });
+    const session = await workbenchAuthStore.createSession({ account, rememberLogin });
     sendWorkbenchSession(response, request, 200, {
       ok: true,
       user: updated.user,
@@ -2154,7 +2346,7 @@ export function createFeishuApiServer({
       return;
     }
 
-    const verified = await workbenchAuthStore.verifyPassword(session.user.phone, currentPassword);
+    const verified = await workbenchAuthStore.verifyPassword(session.user.account || session.user.phone, currentPassword);
     if (!verified) {
       sendWorkbenchAuthJson(response, request, 401, {
         ok: false,
@@ -2165,12 +2357,12 @@ export function createFeishuApiServer({
     }
 
     const updated = await workbenchAuthStore.updatePassword({
-      phone: session.user.phone,
+      account: session.user.account || session.user.phone,
       newPassword,
     });
     const rememberLogin = body.rememberLogin === true || body.remember_login === true;
     const nextSession = await workbenchAuthStore.createSession({
-      phone: session.user.phone,
+      account: session.user.account || session.user.phone,
       rememberLogin,
     });
     sendWorkbenchSession(response, request, 200, {
@@ -2205,9 +2397,9 @@ export function createFeishuApiServer({
     });
   }
 
-  async function attachProcessingStatusToMailPayload(payload = {}) {
-    const statusMap = await loadMailProcessingStatusMap(resolvedDataRoot);
-    const riskOverrides = await loadRiskOverrideMap(resolvedDataRoot);
+  async function attachProcessingStatusToMailPayload(payload = {}, runtimeRoot = resolvedDataRoot) {
+    const statusMap = await loadMailProcessingStatusMap(runtimeRoot);
+    const riskOverrides = await loadRiskOverrideMap(runtimeRoot);
     const mails = Array.isArray(payload.mails)
       ? payload.mails.map((mail) => {
         const directProcessingStatus = statusMap.get(String(mail.id))
@@ -2249,7 +2441,7 @@ export function createFeishuApiServer({
     mailSyncStatus.inFlight = true;
     mailSyncStatus.lastStartedAt = new Date().toISOString();
     const searchParams = buildFullMailSyncSearchParams(mailSyncPageSize);
-    const cacheKey = searchParams.toString();
+    const cacheKey = `global:${searchParams.toString()}`;
 
     mailSyncPromise = (async () => {
       try {
@@ -2452,12 +2644,16 @@ export function createFeishuApiServer({
 
         const config = buildFeishuServerConfig(env);
         const redirectUri = buildLocalOAuthRedirectUri({ request, env });
+        const session = await findWorkbenchSession(request);
+        const state = session
+          ? await workbenchTenantStore.createOAuthState(session.user, requestUrl.searchParams.get('state') || 'mail-workbench')
+          : (requestUrl.searchParams.get('state') || 'mail-workbench');
         response.writeHead(302, {
           location: buildFeishuOAuthAuthorizeUrl({
             appId: config.appId,
             apiBase: config.apiBase,
             redirectUri,
-            state: requestUrl.searchParams.get('state') || 'mail-workbench',
+            state,
             scope: normalizeOAuthScope(requestUrl.searchParams.get('scope') || env.FEISHU_OAUTH_SCOPE || DEFAULT_OAUTH_SCOPES),
           }),
           'cache-control': 'no-store',
@@ -2473,10 +2669,22 @@ export function createFeishuApiServer({
         }
 
         const code = requestUrl.searchParams.get('code') || '';
+        const state = requestUrl.searchParams.get('state') || '';
         if (!code) {
           sendHtml(response, 400, renderOAuthMessagePage({
             title: '飞书授权未完成',
             message: '回调里没有 code。请从 /oauth/start 重新发起授权。',
+            status: 'error',
+          }));
+          return;
+        }
+
+        const oauthState = state ? await workbenchTenantStore.consumeOAuthState(state) : null;
+        if (shouldRequireWorkbenchAuth(env) && !oauthState) {
+          sendHtml(response, 400, renderOAuthMessagePage({
+            title: '飞书授权状态已失效',
+            message: '请先登录工作台，再从当前账号的邮箱设置里重新打开飞书授权入口。',
+            detail: '<a href="/">回到工作台</a>',
             status: 'error',
           }));
           return;
@@ -2506,15 +2714,19 @@ export function createFeishuApiServer({
           refreshExpiresIn,
         });
 
-        await updateLocalEnvValues(envPath, updates);
-        Object.assign(env, updates);
+        if (oauthState) {
+          await workbenchTenantStore.updateTenantTokens(oauthState, updates);
+        } else {
+          await updateLocalEnvValues(envPath, updates);
+          Object.assign(env, updates);
+        }
 
-        const refreshReady = Boolean(refreshToken || env.FEISHU_USER_REFRESH_TOKEN);
+        const refreshReady = Boolean(refreshToken || (!oauthState && env.FEISHU_USER_REFRESH_TOKEN));
 
         sendHtml(response, 200, renderOAuthMessagePage({
           title: refreshReady ? 'user_access_token 和 refresh_token 已写入' : 'user_access_token 已写入，但 refresh_token 未返回',
           message: refreshReady
-            ? '.env.local 已更新，后续 user_access_token 过期会由本地服务自动续期。'
+            ? '当前工作台账号的飞书授权已保存，后续 user_access_token 过期会由服务端自动续期。'
             : '.env.local 已更新，但飞书没有返回 refresh_token。请确认应用权限已开通并发布 offline_access 后，再从 /oauth/start 重新授权一次。',
           detail: '<a href="/api/feishu/status">查看本地飞书状态</a> · <a href="/">回到工作台</a>',
           status: refreshReady ? 'ok' : 'error',
@@ -2560,6 +2772,10 @@ export function createFeishuApiServer({
           return;
         }
         const body = await readJsonBody(request);
+        if (shouldSkipEmailAIProcess(body)) {
+          sendJson(response, 200, buildSkippedEmailAIProcessPayload());
+          return;
+        }
         const result = await handleEmailAIProcessRequest({
           request,
           body,
@@ -2593,9 +2809,11 @@ export function createFeishuApiServer({
           return;
         }
 
+        const tenantContext = await resolveTenantContext(request);
+        const statusEnv = tenantContext.tenantEnv;
         sendJson(response, 200, {
-          ...buildPublicFeishuApiStatus(env),
-          write: buildPublicFeishuWriteStatus(env),
+          ...buildPublicFeishuApiStatus(statusEnv),
+          write: buildPublicFeishuWriteStatus(statusEnv),
           workbenchStorage: {
             dataRootConfigured: Boolean(env.WORKBENCH_DATA_DIR || env.RAILWAY_VOLUME_MOUNT_PATH),
             workbenchDataDirConfigured: Boolean(env.WORKBENCH_DATA_DIR),
@@ -2603,6 +2821,7 @@ export function createFeishuApiServer({
             localEnvLoaded: Boolean(runtimeEnvInfo.loaded),
           },
           workbenchAuth: await workbenchAuthStore.getStorageStatus(),
+          workbenchTenant: await workbenchTenantStore.storageStatus(),
           mailSync: {
             ...mailSyncStatus,
             inFlight: mailSyncStatus.inFlight || Boolean(mailSyncPromise),
@@ -2611,8 +2830,10 @@ export function createFeishuApiServer({
             ...autoProcessStatus,
             inFlight: autoProcessStatus.inFlight || Boolean(autoProcessPromise),
           },
-          mailboxAddress: env.FEISHU_USER_MAILBOX_ID || '',
-          botReportEmail: env.FEISHU_BOT_REPORT_EMAIL || '',
+          tenant: tenantContext.tenant,
+          mailboxBound: tenantContext.mailboxBound,
+          mailboxAddress: statusEnv.FEISHU_USER_MAILBOX_ID || '',
+          botReportEmail: statusEnv.FEISHU_BOT_REPORT_EMAIL || '',
           appIdMasked: maskConfigValue(env.FEISHU_APP_ID),
           localEnvLoaded: Boolean(runtimeEnvInfo.loaded),
         });
@@ -2625,12 +2846,15 @@ export function createFeishuApiServer({
           return;
         }
 
-        const cacheKey = requestUrl.searchParams.toString() || 'default';
+        const tenantContext = await requireTenantMailboxBinding(request, response);
+        if (!tenantContext) return;
+
+        const cacheKey = `${tenantContext.cacheScope}:${requestUrl.searchParams.toString() || 'default'}`;
         const cached = mailReadCache.get(cacheKey);
         const now = Date.now();
 
         if (cached && now - cached.cachedAt <= mailReadCacheTtlMs) {
-          const payload = await attachProcessingStatusToMailPayload(cached.payload);
+          const payload = await attachProcessingStatusToMailPayload(cached.payload, tenantContext.runtimeRoot);
           sendJson(response, 200, {
             ...payload,
             cacheStatus: 'hit',
@@ -2641,7 +2865,7 @@ export function createFeishuApiServer({
 
         const result = await readFeishuMessages({
           fetchImpl,
-          env,
+          env: tenantContext.tenantEnv,
           searchParams: requestUrl.searchParams,
         });
 
@@ -2658,7 +2882,7 @@ export function createFeishuApiServer({
           const payload = await attachProcessingStatusToMailPayload({
             ...result.payload,
             cacheStatus: 'miss',
-          });
+          }, tenantContext.runtimeRoot);
           mailReadCache.set(cacheKey, {
             cachedAt: now,
             payload,
@@ -2671,7 +2895,7 @@ export function createFeishuApiServer({
         }
 
         if (cached) {
-          const payload = await attachProcessingStatusToMailPayload(cached.payload);
+          const payload = await attachProcessingStatusToMailPayload(cached.payload, tenantContext.runtimeRoot);
           sendJson(response, 200, {
             ...payload,
             ok: true,
@@ -2691,15 +2915,17 @@ export function createFeishuApiServer({
           sendMethodNotAllowed(response);
           return;
         }
+        const tenantContext = await requireTenantMailboxBinding(request, response);
+        if (!tenantContext) return;
         const body = await readJsonBody(request);
         const result = await executeWriteAction({
           action: 'send',
           body,
-          env,
-          envInfo: runtimeEnvInfo,
+          env: tenantContext.tenantEnv,
+          envInfo: tenantContext.tenantEnvInfo,
           fetchImpl,
           auditWriter,
-          rootDir: resolvedDataRoot,
+          rootDir: tenantContext.runtimeRoot,
         });
         sendJson(response, result.statusCode, result.payload);
         return;
@@ -2710,15 +2936,17 @@ export function createFeishuApiServer({
           sendMethodNotAllowed(response);
           return;
         }
+        const tenantContext = await requireTenantMailboxBinding(request, response);
+        if (!tenantContext) return;
         const body = await readJsonBody(request);
         const result = await executeWriteAction({
           action: 'archive',
           body,
-          env,
-          envInfo: runtimeEnvInfo,
+          env: tenantContext.tenantEnv,
+          envInfo: tenantContext.tenantEnvInfo,
           fetchImpl,
           auditWriter,
-          rootDir: resolvedDataRoot,
+          rootDir: tenantContext.runtimeRoot,
         });
         sendJson(response, result.statusCode, result.payload);
         return;
@@ -2729,11 +2957,12 @@ export function createFeishuApiServer({
           sendMethodNotAllowed(response);
           return;
         }
+        const tenantContext = await resolveTenantContext(request);
         const body = await readJsonBody(request);
         const result = await recordApprovalAction({
           body,
           auditWriter,
-          rootDir: resolvedDataRoot,
+          rootDir: tenantContext.runtimeRoot,
         });
         sendJson(response, result.statusCode, result.payload);
         return;
@@ -2744,14 +2973,16 @@ export function createFeishuApiServer({
           sendMethodNotAllowed(response);
           return;
         }
+        const tenantContext = await requireTenantMailboxBinding(request, response);
+        if (!tenantContext) return;
         const body = await readJsonBody(request);
         const result = await executeClosedLoopProcess({
           body,
-          env,
-          envInfo: runtimeEnvInfo,
+          env: tenantContext.tenantEnv,
+          envInfo: tenantContext.tenantEnvInfo,
           fetchImpl,
           auditWriter,
-          rootDir: resolvedDataRoot,
+          rootDir: tenantContext.runtimeRoot,
           emailAIRepository,
         });
         sendJson(response, result.statusCode, result.payload);
@@ -2763,14 +2994,16 @@ export function createFeishuApiServer({
           sendMethodNotAllowed(response);
           return;
         }
+        const tenantContext = await requireTenantMailboxBinding(request, response);
+        if (!tenantContext) return;
         const body = await readJsonBody(request);
         const result = await executeBotMessageAction({
           body,
-          env,
-          envInfo: runtimeEnvInfo,
+          env: tenantContext.tenantEnv,
+          envInfo: tenantContext.tenantEnvInfo,
           fetchImpl,
           auditWriter,
-          rootDir: resolvedDataRoot,
+          rootDir: tenantContext.runtimeRoot,
         });
         sendJson(response, result.statusCode, result.payload);
         return;
@@ -2781,15 +3014,23 @@ export function createFeishuApiServer({
           sendMethodNotAllowed(response);
           return;
         }
+        const tenantContext = await requireTenantMailboxBinding(request, response);
+        if (!tenantContext) return;
         const body = await readJsonBody(request);
         const result = await ensureArchiveFolder({
           body,
-          env,
-          envInfo: runtimeEnvInfo,
+          env: tenantContext.tenantEnv,
+          envInfo: tenantContext.tenantEnvInfo,
           fetchImpl,
           auditWriter,
-          rootDir: resolvedDataRoot,
+          rootDir: tenantContext.runtimeRoot,
         });
+        if (result.payload?.ok && tenantContext.session) {
+          await workbenchTenantStore.updateTenantTokens(tenantContext.session.user, {
+            FEISHU_ARCHIVE_FOLDER_ID: result.payload.result?.folderId || '',
+            FEISHU_ARCHIVE_FOLDER_NAME: result.payload.result?.name || '',
+          });
+        }
         sendJson(response, result.statusCode, result.payload);
         return;
       }
@@ -2799,10 +3040,11 @@ export function createFeishuApiServer({
           sendMethodNotAllowed(response);
           return;
         }
+        const tenantContext = await resolveTenantContext(request);
         const body = await readJsonBody(request);
         const result = await updateRiskOverrideAction({
           body,
-          rootDir: resolvedDataRoot,
+          rootDir: tenantContext.runtimeRoot,
         });
         sendJson(response, result.statusCode, result.payload);
         return;
@@ -2813,12 +3055,15 @@ export function createFeishuApiServer({
           sendMethodNotAllowed(response);
           return;
         }
+        const tenantContext = await resolveTenantContext(request);
         const body = await readJsonBody(request);
-        const result = await updateFeishuLocalConfig({
+        const result = await updateFeishuTenantConfig({
           body,
           env,
           envInfo: runtimeEnvInfo,
           rootDir: resolvedDataRoot,
+          tenantStore: workbenchTenantStore,
+          session: tenantContext.session,
         });
         sendJson(response, result.statusCode, result.payload);
         return;

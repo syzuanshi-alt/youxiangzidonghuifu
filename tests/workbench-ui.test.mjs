@@ -190,7 +190,7 @@ function startStaticServer() {
 
 async function installApiRoutes(page, capturedActions, options = {}) {
   const authState = {
-    phone: '',
+    account: '',
     password: 'StrongPass123',
     session: '',
   };
@@ -231,7 +231,7 @@ async function installApiRoutes(page, capturedActions, options = {}) {
         contentType: 'application/json',
         body: JSON.stringify({
           ok: true,
-          user: { phone: authState.phone, createdAt: '2026-07-03T00:00:00.000Z' },
+          user: { account: authState.account, createdAt: '2026-07-03T00:00:00.000Z' },
         }),
       });
       return;
@@ -250,7 +250,7 @@ async function installApiRoutes(page, capturedActions, options = {}) {
       if (options.authDelayMs) {
         await new Promise((resolve) => setTimeout(resolve, options.authDelayMs));
       }
-      authState.phone = String(payload.phone || '');
+      authState.account = String(payload.account || payload.phone || '');
       authState.password = String(payload.newPassword || payload.password || authState.password);
       authState.session = 'ui-test-session';
       await route.fulfill({
@@ -261,7 +261,7 @@ async function installApiRoutes(page, capturedActions, options = {}) {
         },
         body: JSON.stringify({
           ok: true,
-          user: { phone: authState.phone, createdAt: '2026-07-03T00:00:00.000Z' },
+          user: { account: authState.account, createdAt: '2026-07-03T00:00:00.000Z' },
         }),
       });
       return;
@@ -295,7 +295,7 @@ async function installApiRoutes(page, capturedActions, options = {}) {
         },
         body: JSON.stringify({
           ok: true,
-          user: { phone: authState.phone, createdAt: '2026-07-03T00:00:00.000Z' },
+          user: { account: authState.account, createdAt: '2026-07-03T00:00:00.000Z' },
           message: '密码已修改。',
         }),
       });
@@ -320,6 +320,7 @@ async function installApiRoutes(page, capturedActions, options = {}) {
         body: JSON.stringify({
           ok: true,
           configured: true,
+          mailboxBound: true,
           messagesLoaded: true,
           fetchedCount: mailState.mails.length,
           sourceStatus: '真实接入',
@@ -385,6 +386,7 @@ async function installApiRoutes(page, capturedActions, options = {}) {
 
     if (path === '/api/email-ai/process') {
       const payload = JSON.parse(request.postData() || '{}');
+      capturedActions.push({ path, payload });
       const subject = String(payload.subject || '');
       const isHigh = subject.includes('退款');
       const isMedium = subject.includes('Order status');
@@ -645,6 +647,7 @@ try {
     localStorage.removeItem('email-auto-reply-workbench-accounts');
     localStorage.removeItem('email-auto-reply-workbench-session');
     localStorage.removeItem('email-auto-reply-workbench-sms-codes');
+    localStorage.removeItem('email-auto-reply-workbench-remembered-account');
     localStorage.removeItem('email-auto-reply-workbench-remembered-phone');
     localStorage.removeItem('feishu-mail-risk-overrides');
     localStorage.removeItem('feishu-mail-manual-archive-selections');
@@ -660,7 +663,7 @@ try {
   await page.locator('[data-login-mode="reset"]').click();
   await waitForText(page, '重置工作台密码');
   await page.locator('[data-login-mode="create"]').click();
-  await page.locator('input[name="phone"]').fill('18800000000');
+  await page.locator('input[name="account"]').fill('ops.team@example.com');
   await page.locator('input[name="password"]').fill('StrongPass123');
   await page.locator('input[name="inviteCode"]').fill('invite-code');
   await page.locator('input[name="rememberAccount"]').check();
@@ -675,15 +678,27 @@ try {
   await waitForText(page, '数据总览');
   const storedAccounts = await page.evaluate(() => localStorage.getItem('email-auto-reply-workbench-accounts'));
   const storedSmsCodes = await page.evaluate(() => localStorage.getItem('email-auto-reply-workbench-sms-codes'));
-  const rememberedPhone = await page.evaluate(() => localStorage.getItem('email-auto-reply-workbench-remembered-phone'));
+  const rememberedPhone = await page.evaluate(() => localStorage.getItem('email-auto-reply-workbench-remembered-account'));
   assert.equal(storedAccounts, null);
   assert.equal(storedSmsCodes, null);
-  assert.equal(rememberedPhone, '18800000000');
+  assert.equal(rememberedPhone, 'ops.team@example.com');
 
   await page.reload({ waitUntil: 'domcontentloaded' });
   await waitForText(page, '数据总览');
   assert.equal(await page.locator('.login-overlay.open').count(), 0);
   await waitForText(page, '我要取消订单并退款');
+  const initialAiSubjects = capturedActions
+    .filter((action) => action.path === '/api/email-ai/process')
+    .map((action) => action.payload.subject);
+  assert.equal(initialAiSubjects.includes('已完成历史邮件'), false);
+  assert.equal(initialAiSubjects.includes('SEO backlinks 广告外链推广'), false);
+  await waitForText(page, '收件箱');
+  await waitForText(page, '待处理');
+  await waitForText(page, '已处理');
+  assert.equal(await page.locator('[data-mailbox-filter="urgent"]').count(), 0);
+  assert.equal(await page.locator('[data-mailbox-filter="low_risk"]').count(), 0);
+  assert.equal(await page.locator('[data-mailbox-filter="medium_risk"]').count(), 0);
+  assert.equal(await page.locator('[data-mailbox-filter="archived"]').count(), 0);
 
   const failedMailRead = waitForNextMailRequest((event) => event.fail === true);
   mailState.failMessages = true;
@@ -721,7 +736,7 @@ try {
   await waitForText(page, '登录工作台');
   await page.locator('[data-login-mode="reset"]').click();
   const resetForm = page.locator('[data-workbench-login-form]');
-  await resetForm.locator('input[name="phone"]').fill('18800000000');
+  await resetForm.locator('input[name="account"]').fill('ops.team@example.com');
   await resetForm.locator('input[name="password"]').fill('ResetPass123');
   await resetForm.locator('input[name="resetCode"]').fill('invite-code');
   await page.evaluate(() => {
@@ -741,7 +756,7 @@ try {
   await completedHistoryRow.locator('.status-pill-completed').waitFor({ state: 'visible', timeout: 2_000 });
   assert.match(await completedHistoryRow.innerText(), /已自动回复/);
 
-  await page.locator('.mailbox-alert-item[data-mailbox-filter="urgent"]').click();
+  await page.locator('button[data-mailbox-filter="pending"]').click();
   await waitForText(page, '我要取消订单并退款');
 
   await page.evaluate(() => window.__workbenchTestHooks.setMailboxFilter('all'));
@@ -779,7 +794,8 @@ try {
   assert.doesNotMatch(portugueseTranslationBlock, /原文已是中文|客户在询问订单信息或订单状态|solicitação|devolução/);
   await page.locator('[data-mailbox-search]').fill('');
 
-  await page.locator('button[data-mailbox-filter="low_risk"]').click();
+  await page.evaluate(() => window.__workbenchTestHooks.setMailboxFilter('pending'));
+  await page.locator('[data-mailbox-search]').fill('已发送资料');
   await waitForText(page, '已发送资料，请查收');
 
   await page.locator('button[data-mailbox-filter="spam"]').first().click();
@@ -799,7 +815,8 @@ try {
   await page.locator('[data-close-settings]').click();
 
   await page.locator('[data-mailbox-search]').fill('');
-  await page.locator('button[data-mailbox-filter="medium_risk"]').click();
+  await page.evaluate(() => window.__workbenchTestHooks.setMailboxFilter('pending'));
+  await page.locator('[data-mailbox-search]').fill('Order status');
   await clickMailRow(page, 'Order status SH-TEST-1001');
   await waitForText(page, '客户原文');
   await waitForText(page, 'Could you check my order status SH-TEST-1001?');
@@ -837,7 +854,8 @@ try {
     return !overrides['MAIL-MEDIUM'] && !overrides['MSG-MEDIUM'];
   });
 
-  await page.locator('button[data-mailbox-filter="low_risk"]').click();
+  await page.evaluate(() => window.__workbenchTestHooks.setMailboxFilter('pending'));
+  await page.locator('[data-mailbox-search]').fill('已发送资料');
   await clickMailRow(page, '已发送资料，请查收');
   await page.locator('[data-send-selected]').click();
   await page.waitForFunction(
@@ -851,7 +869,7 @@ try {
     '确认真实发送 should call the send endpoint',
   );
 
-  await page.locator('button[data-mailbox-filter="spam"]:not([data-mailbox-section-toggle])').click();
+  await page.evaluate(() => window.__workbenchTestHooks.setMailboxFilter('spam'));
   await clickMailRow(page, 'SEO backlinks 广告外链推广');
   const archiveButton = page.locator('[data-archive-selected]');
   await archiveButton.waitFor({ state: 'visible', timeout: 2_000 });
@@ -861,20 +879,21 @@ try {
     true,
     '归档 / 移箱 should call the archive endpoint',
   );
-  await page.evaluate(() => window.__workbenchTestHooks.setMailboxFilter('archived'));
+  await page.evaluate(() => window.__workbenchTestHooks.setMailboxFilter('completed'));
   await waitForText(page, 'SEO backlinks 广告外链推广');
   const archivedSpamRow = await page.locator('.mail-row').filter({ hasText: 'SEO backlinks 广告外链推广' }).first().innerText();
   assert.match(archivedSpamRow, /已归档/);
   assert.doesNotMatch(archivedSpamRow, /垃圾邮件/);
 
   await page.locator('[data-mailbox-search]').fill('');
-  await page.locator('button[data-mailbox-filter="medium_risk"]').click();
+  await page.evaluate(() => window.__workbenchTestHooks.setMailboxFilter('pending'));
+  await page.locator('[data-mailbox-search]').fill('Order status');
   await clickMailRow(page, 'Order status SH-TEST-1001');
   await page.locator('[data-manual-archive-toggle]').check();
   await page.locator('[data-confirm-manual-archive]').click();
   const manualArchiveSelections = await readJsonLocalStorage(page, 'feishu-mail-manual-archive-selections');
   assert.equal(manualArchiveSelections['MAIL-MEDIUM']?.checked, true);
-  await page.evaluate(() => window.__workbenchTestHooks.setMailboxFilter('archived'));
+  await page.evaluate(() => window.__workbenchTestHooks.setMailboxFilter('completed'));
   await waitForText(page, 'Order status SH-TEST-1001');
   const manuallyArchivedRow = await page.locator('.mail-row').filter({ hasText: 'Order status SH-TEST-1001' }).first().innerText();
   assert.match(manuallyArchivedRow, /已归档/);

@@ -4,7 +4,7 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>飞书邮箱自动回复工作台</title>
-    <link rel="stylesheet" href="./src/styles.css?v=spam-ignored-status" />
+    <link rel="stylesheet" href="./src/styles.css?v=tenant-workbench-v1" />
   </head>
   <body>
     <section class="login-overlay open" data-login-gate aria-label="工作台登录">
@@ -56,78 +56,32 @@
               </label>
               <button class="mailbox-home-button" type="button" data-open-overview>返回主页</button>
               <nav class="mailbox-folder-list" aria-label="邮箱分类">
-                <div class="mailbox-menu-section open" data-mailbox-section="urgent">
-                  <button class="mailbox-folder-item primary urgent-folder-item" type="button" data-mailbox-section-toggle="urgent" data-mailbox-filter="urgent" aria-expanded="true">
-                    <span>需紧急处理</span>
-                    <strong data-mailbox-count="urgent">0</strong>
-                  </button>
-                  <div class="mailbox-submenu" data-mailbox-submenu="urgent">
-                    <button class="mailbox-alert-item" type="button" data-mailbox-filter="urgent">
-                      <span>查看高风险邮件</span>
-                      <strong data-mailbox-count="urgent">0</strong>
-                    </button>
-                  </div>
-                  <div class="mailbox-inline-list" data-mailbox-inline-list="urgent" hidden></div>
-                </div>
-                <div class="mailbox-menu-section open" data-mailbox-section="inbox">
-                  <button class="mailbox-folder-item primary" type="button" data-mailbox-section-toggle="inbox" data-mailbox-filter="inbox" aria-expanded="true">
+                <div class="mailbox-menu-section open" data-mailbox-section="all">
+                  <button class="mailbox-folder-item primary" type="button" data-mailbox-section-toggle="all" data-mailbox-filter="all" aria-expanded="true">
                     <span>收件箱</span>
-                    <strong data-mailbox-count="inbox">0</strong>
+                    <strong data-mailbox-count="all">0</strong>
                   </button>
-                  <div class="mailbox-submenu" data-mailbox-submenu="inbox">
-                    <button type="button" data-mailbox-filter="medium_risk">中风险 <strong data-mailbox-count="medium_risk">0</strong></button>
-                    <button type="button" data-mailbox-filter="low_risk">低风险 <strong data-mailbox-count="low_risk">0</strong></button>
-                  </div>
-                  <div class="mailbox-inline-list" data-mailbox-inline-list="inbox" hidden></div>
+                  <div class="mailbox-inline-list" data-mailbox-inline-list="all" hidden></div>
                 </div>
-                <div class="mailbox-menu-section" data-mailbox-section="favorite">
-                  <button class="mailbox-folder-item" type="button" data-mailbox-section-toggle="favorite" data-mailbox-filter="favorite" aria-expanded="false">
-                    <span>收藏</span>
-                    <strong data-mailbox-count="favorite">0</strong>
+                <div class="mailbox-menu-section open" data-mailbox-section="pending">
+                  <button class="mailbox-folder-item primary urgent-folder-item" type="button" data-mailbox-section-toggle="pending" data-mailbox-filter="pending" aria-expanded="true">
+                    <span>待处理</span>
+                    <strong data-mailbox-count="pending">0</strong>
                   </button>
-                  <div class="mailbox-submenu" data-mailbox-submenu="favorite" hidden>
-                    <button type="button" data-mailbox-filter="favorite">查看收藏 <strong data-mailbox-count="favorite">0</strong></button>
-                  </div>
-                  <div class="mailbox-inline-list" data-mailbox-inline-list="favorite" hidden></div>
+                  <div class="mailbox-inline-list" data-mailbox-inline-list="pending" hidden></div>
                 </div>
-                <div class="mailbox-menu-section" data-mailbox-section="sent">
-                  <button class="mailbox-folder-item" type="button" data-mailbox-section-toggle="sent" data-mailbox-filter="sent" aria-expanded="false">
-                    <span>已发送</span>
-                    <strong data-mailbox-count="sent">0</strong>
+                <div class="mailbox-menu-section" data-mailbox-section="completed">
+                  <button class="mailbox-folder-item" type="button" data-mailbox-section-toggle="completed" data-mailbox-filter="completed" aria-expanded="false">
+                    <span>已处理</span>
+                    <strong data-mailbox-count="completed">0</strong>
                   </button>
-                  <div class="mailbox-submenu" data-mailbox-submenu="sent" hidden>
-                    <button type="button" data-mailbox-filter="sent">查看已发送 <strong data-mailbox-count="sent">0</strong></button>
-                  </div>
-                  <div class="mailbox-inline-list" data-mailbox-inline-list="sent" hidden></div>
-                </div>
-                <div class="mailbox-menu-section" data-mailbox-section="archived">
-                  <button class="mailbox-folder-item" type="button" data-mailbox-section-toggle="archived" data-mailbox-filter="archived" aria-expanded="false">
-                    <span>已归档</span>
-                    <strong data-mailbox-count="archived">0</strong>
-                  </button>
-                  <div class="mailbox-submenu" data-mailbox-submenu="archived" hidden>
-                    <button type="button" data-mailbox-filter="archived">查看已归档 <strong data-mailbox-count="archived">0</strong></button>
-                  </div>
-                  <div class="mailbox-inline-list" data-mailbox-inline-list="archived" hidden></div>
-                </div>
-                <div class="mailbox-menu-section" data-mailbox-section="deleted">
-                  <button class="mailbox-folder-item" type="button" data-mailbox-section-toggle="deleted" data-mailbox-filter="deleted" aria-expanded="false">
-                    <span>已删除</span>
-                    <strong data-mailbox-count="deleted">0</strong>
-                  </button>
-                  <div class="mailbox-submenu" data-mailbox-submenu="deleted" hidden>
-                    <button type="button" data-mailbox-filter="deleted">查看已删除 <strong data-mailbox-count="deleted">0</strong></button>
-                  </div>
-                  <div class="mailbox-inline-list" data-mailbox-inline-list="deleted" hidden></div>
+                  <div class="mailbox-inline-list" data-mailbox-inline-list="completed" hidden></div>
                 </div>
                 <div class="mailbox-menu-section" data-mailbox-section="spam">
                   <button class="mailbox-folder-item" type="button" data-mailbox-section-toggle="spam" data-mailbox-filter="spam" aria-expanded="false">
                     <span>垃圾邮件</span>
                     <strong data-mailbox-count="spam">0</strong>
                   </button>
-                  <div class="mailbox-submenu" data-mailbox-submenu="spam" hidden>
-                    <button type="button" data-mailbox-filter="spam">查看垃圾邮件 <strong data-mailbox-count="spam">0</strong></button>
-                  </div>
                   <div class="mailbox-inline-list" data-mailbox-inline-list="spam" hidden></div>
                 </div>
               </nav>
@@ -227,7 +181,8 @@
     </section>
 
     <div class="mail-toast-stack" data-mail-toast-stack aria-live="polite" aria-label="新邮件提醒"></div>
+    <div class="action-notice-stack" data-action-notice-stack aria-live="polite" aria-label="操作结果提醒"></div>
 
-    <script type="module" src="./src/app.js?v=spam-ignored-status"></script>
+    <script type="module" src="./src/app.js?v=tenant-workbench-v1"></script>
   </body>
 </html>

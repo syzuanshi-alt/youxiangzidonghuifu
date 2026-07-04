@@ -16,6 +16,22 @@ function defaultStore() {
   };
 }
 
+function normalizeAccount(account = '') {
+  const rawText = String(account || '').trim();
+  const phoneLike = normalizePhone(rawText);
+  if (/^\+?[\d\s().-]+$/.test(rawText) && phoneLike.length >= 6) {
+    return phoneLike;
+  }
+  return rawText.toLowerCase();
+}
+
+function isValidAccount(account = '') {
+  const normalized = normalizeAccount(account);
+  return normalized.length >= 3
+    && normalized.length <= 64
+    && /^[a-z0-9._@+-]+$/.test(normalized);
+}
+
 function normalizePhone(phone = '') {
   const digits = String(phone || '').trim().replace(/[^\d]/g, '');
   if (digits.length === 13 && digits.startsWith('86')) {
@@ -24,10 +40,16 @@ function normalizePhone(phone = '') {
   return digits;
 }
 
+function accountForRecord(record = {}) {
+  return normalizeAccount(record.account || record.phone || '');
+}
+
 function publicUser(record = {}) {
+  const account = accountForRecord(record);
   return {
     id: record.id || '',
-    phone: record.phone || '',
+    account,
+    phone: record.phone || (/^\d{6,20}$/.test(account) ? account : ''),
     createdAt: record.createdAt || '',
     lastLoginAt: record.lastLoginAt || '',
   };
@@ -80,19 +102,25 @@ export function createWorkbenchAuthStore({
     }, null, 2)}\n`, 'utf8');
   }
 
-  async function createUser({ phone, password } = {}) {
-    const normalizedPhone = normalizePhone(phone);
+  function findUserRecord(store, account) {
+    const normalizedAccount = normalizeAccount(account);
+    return store.users.find((user) => accountForRecord(user) === normalizedAccount) || null;
+  }
+
+  async function createUser({ account, phone, password } = {}) {
+    const normalizedAccount = normalizeAccount(account || phone);
     const store = await readStore();
-    if (!normalizedPhone) {
-      throw new Error('手机号不能为空。');
+    if (!isValidAccount(normalizedAccount)) {
+      throw new Error('账号格式不正确，请使用 3-64 位邮箱、字母、数字、下划线、短横线或点号。');
     }
-    if (store.users.some((user) => user.phone === normalizedPhone)) {
-      throw new Error('这个手机号已创建账号。');
+    if (findUserRecord(store, normalizedAccount)) {
+      throw new Error('这个账号已创建。');
     }
 
     const record = {
       id: `user_${randomBytes(12).toString('hex')}`,
-      phone: normalizedPhone,
+      account: normalizedAccount,
+      phone: /^\d{6,20}$/.test(normalizedAccount) ? normalizedAccount : '',
       passwordHash: await hashPassword(password),
       createdAt: new Date().toISOString(),
       lastLoginAt: '',
@@ -106,35 +134,43 @@ export function createWorkbenchAuthStore({
     };
   }
 
-  async function findUserByPhone(phone) {
-    const normalizedPhone = normalizePhone(phone);
+  async function findUserByAccount(account) {
+    const normalizedAccount = normalizeAccount(account);
     const store = await readStore();
-    const record = store.users.find((user) => user.phone === normalizedPhone);
+    const record = findUserRecord(store, normalizedAccount);
     return record ? publicUser(record) : null;
   }
 
-  async function findRawUserByPhone(phone) {
-    const normalizedPhone = normalizePhone(phone);
-    const store = await readStore();
-    return store.users.find((user) => user.phone === normalizedPhone) || null;
+  async function findUserByPhone(phone) {
+    return findUserByAccount(phone);
   }
 
-  async function verifyPassword(phone, password) {
-    const record = await findRawUserByPhone(phone);
+  async function findRawUserByAccount(account) {
+    const normalizedAccount = normalizeAccount(account);
+    const store = await readStore();
+    return findUserRecord(store, normalizedAccount);
+  }
+
+  async function findRawUserByPhone(phone) {
+    return findRawUserByAccount(phone);
+  }
+
+  async function verifyPassword(account, password) {
+    const record = await findRawUserByAccount(account);
     if (!record) return false;
     return verifyPasswordHash(password, record.passwordHash);
   }
 
-  async function updatePassword({ phone, newPassword } = {}) {
-    const normalizedPhone = normalizePhone(phone);
+  async function updatePassword({ account, phone, newPassword } = {}) {
+    const normalizedAccount = normalizeAccount(account || phone);
     const store = await readStore();
-    const record = store.users.find((user) => user.phone === normalizedPhone);
+    const record = findUserRecord(store, normalizedAccount);
     if (!record) {
       throw new Error('账号不存在。');
     }
 
     record.passwordHash = await hashPassword(newPassword);
-    store.sessions = store.sessions.filter((item) => item.phone !== normalizedPhone);
+    store.sessions = store.sessions.filter((item) => normalizeAccount(item.account || item.phone) !== normalizedAccount);
     await writeStore(store);
 
     return {
@@ -143,10 +179,10 @@ export function createWorkbenchAuthStore({
     };
   }
 
-  async function createSession({ phone, rememberLogin = false } = {}) {
-    const normalizedPhone = normalizePhone(phone);
+  async function createSession({ account, phone, rememberLogin = false } = {}) {
+    const normalizedAccount = normalizeAccount(account || phone);
     const store = await readStore();
-    const record = store.users.find((user) => user.phone === normalizedPhone);
+    const record = findUserRecord(store, normalizedAccount);
     if (!record) {
       throw new Error('账号不存在。');
     }
@@ -154,7 +190,8 @@ export function createWorkbenchAuthStore({
     const now = Date.now();
     const session = {
       token: randomBytes(32).toString('hex'),
-      phone: normalizedPhone,
+      account: accountForRecord(record),
+      phone: record.phone || '',
       createdAt: new Date(now).toISOString(),
       expiresAt: new Date(now + (rememberLogin ? rememberTtlMs : sessionTtlMs)).toISOString(),
       rememberLogin: Boolean(rememberLogin),
@@ -162,7 +199,7 @@ export function createWorkbenchAuthStore({
     record.lastLoginAt = new Date(now).toISOString();
     store.sessions = store.sessions
       .filter((item) => item.expiresAt && Date.parse(item.expiresAt) > now)
-      .filter((item) => item.phone !== normalizedPhone);
+      .filter((item) => normalizeAccount(item.account || item.phone) !== normalizedAccount);
     store.sessions.push(session);
     await writeStore(store);
 
@@ -184,7 +221,7 @@ export function createWorkbenchAuthStore({
       return null;
     }
 
-    const record = store.users.find((user) => user.phone === session.phone);
+    const record = findUserRecord(store, session.account || session.phone);
     if (!record) return null;
 
     return {
@@ -232,6 +269,7 @@ export function createWorkbenchAuthStore({
 
   return {
     createUser,
+    findUserByAccount,
     findUserByPhone,
     verifyPassword,
     updatePassword,
