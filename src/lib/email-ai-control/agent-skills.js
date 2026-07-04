@@ -240,6 +240,9 @@ export function createEmailAgentSkills({
         spam: context.spam || {},
         risk: context.risk || {},
         knowledge: context.knowledge || { entries: [], refs: [] },
+        normalizedContext: context.normalizedContext || null,
+        missingFields: context.missingFields || null,
+        intent: context.intent || null,
         env: context.env,
         fetchImpl: context.fetchImpl,
       });

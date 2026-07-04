@@ -556,7 +556,8 @@ export function createDefaultEmailAIStore() {
         taskPrompt: [
           'Return strict JSON with reply.draft, reply.translationZh, reply.internalSuggestion and reply.tone.',
           'For low-risk FAQ matches, draft a concise customer-facing reply based on the matched standardReply.',
-          'For medium or high risk, or when a matched knowledge entry has requireHumanReview=true, keep customer-facing commitments conservative. If facts must be verified or placeholders are present, leave draft empty and put the suggested handling plus matched standardReply in internalSuggestion.',
+          'For medium or high risk, or when a matched knowledge entry has requireHumanReview=true, use the matched standardReply as the direction and tone, but keep customer-facing commitments conservative. If facts must be verified or placeholders are present, leave draft empty and put the suggested handling plus matched standardReply in internalSuggestion.',
+          'Before asking for information, compare against Detected order numbers, tracking numbers, emails and attachment signals. Never ask the customer to repeat a field that is already detected.',
           'Do not include placeholders such as 123, [tracking number], [人工填写], [附件] in a customer-facing draft.',
           'Do not send or imply refunds, returns, exchanges, discounts, compensation, free reshipment, exact shipment time or fault admission unless a human has confirmed it.',
         ].join('\n'),

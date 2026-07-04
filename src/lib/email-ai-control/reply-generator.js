@@ -10,6 +10,9 @@ export async function generateEmailAIReply({
   spam = {},
   risk = {},
   knowledge = { entries: [], refs: [] },
+  normalizedContext = null,
+  missingFields = null,
+  intent = null,
   env = process.env,
   fetchImpl = fetch,
 } = {}) {
@@ -35,6 +38,9 @@ export async function generateEmailAIReply({
     risk,
     knowledgeBaseRefs: knowledge.refs || [],
     knowledgeBaseEntries: knowledge.entries || [],
+    normalizedContext,
+    missingFields,
+    intent,
   });
 
   const modelReply = await callModel({
@@ -43,6 +49,9 @@ export async function generateEmailAIReply({
     emailPayload,
     risk,
     knowledgeEntries: knowledge.entries || [],
+    normalizedContext,
+    missingFields,
+    intent,
     prompt,
     env,
     fetchImpl,

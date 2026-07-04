@@ -439,6 +439,26 @@ assert.equal(lowRisk.replyCandidates[0].allowsRealSend, false);
 assert.equal(lowRisk.replyCandidates[0].language, 'zh');
 assert.match(lowRisk.replyCandidates[0].contentZh, /订单号|下单邮箱/);
 
+const orderStatusWithIdentifier = classifyMail({
+  subject: 'Need help',
+  sender: 'buyer-order-ready@example.test',
+  bodyText: 'Hello, my order number is VS-75209. Could you help me check the order status?',
+});
+assert.equal(orderStatusWithIdentifier.action, 'draft_only');
+assert.equal(orderStatusWithIdentifier.templateId, 'TPL-ORDER-STATUS-001');
+assert.doesNotMatch(orderStatusWithIdentifier.replyDraft, /请提供订单号|share your order number|order email/i);
+assert.match(orderStatusWithIdentifier.replyDraft, /VS-75209|已经提供|这条订单|我这边|我来/);
+
+const japaneseOrderStatusWithIdentifier = classifyMail({
+  subject: '注文状況について',
+  sender: 'buyer-ja-order-ready@example.test',
+  bodyText: '注文番号 VS-75209 です。配送状況を確認したいです。',
+});
+assert.equal(japaneseOrderStatusWithIdentifier.action, 'draft_only');
+assert.equal(japaneseOrderStatusWithIdentifier.customerLanguageCode, 'ja');
+assert.doesNotMatch(japaneseOrderStatusWithIdentifier.replyDraft, /注文番号.*お知らせ|注文時のメールアドレス/);
+assert.match(japaneseOrderStatusWithIdentifier.replyDraft, /すでに共有|注文情報|VS-75209/);
+
 const translatedOrderMessage = translateCustomerMessageToChinese('Hello, I want to check my order status but I do not have the order number.');
 assert.match(translatedOrderMessage.text, /订单/);
 assert.equal(translatedOrderMessage.source, 'local_fallback');
@@ -4652,6 +4672,17 @@ try {
   }, { repository });
   assert.equal(mediumAIResult.risk.level, 'medium');
   assert.equal(mediumAIResult.finalAction, 'human_review');
+
+  const mediumAIResultWithOrder = await processEmailWithAI({
+    senderEmail: 'buyer-ai-medium-order@example.test',
+    subject: 'Where is my package?',
+    body: 'My order number is VS-75209. The logistics status looks abnormal and I am worried.',
+    source: 'email_auto_reply_workbench',
+  }, { repository });
+  assert.equal(mediumAIResultWithOrder.risk.level, 'medium');
+  assert.ok(!mediumAIResultWithOrder.missingFields.missingFields.includes('order_number_or_email'));
+  assert.doesNotMatch(mediumAIResultWithOrder.reply.draft, /share your order number|please provide your order number|请补充订单号/i);
+  assert.match(mediumAIResultWithOrder.reply.draft, /VS-75209|provided|already shared|这条订单|我这边/i);
 
   const highAIResult = await processEmailWithAI({
     senderEmail: 'buyer-ai-high@example.test',

@@ -1,6 +1,7 @@
 import { buildReplyCandidates, getTemplateByScene } from './replyTemplates.js';
 import { detectCustomerLanguage } from './emailTranslation.js';
 import { getMailRiskState } from './riskState.js';
+import { normalizeEmailContext } from './lib/email-ai-control/email-context-normalizer.js';
 
 const HIGH_RISK = [
   {
@@ -43,12 +44,12 @@ const HIGH_RISK = [
 const MEDIUM_RISK = [
   {
     name: '查订单',
-    keywords: ['订单状态', '查询订单', '订单号', 'order status', 'status'],
+    keywords: ['订单状态', '查询订单', '订单号', 'order status', 'status', '注文状況', '注文番号', '注文確認'],
     reason: '客户查询订单，需要人工核对订单状态。',
   },
   {
     name: '查物流',
-    keywords: ['物流', '快递', '包裹', '签收', '发货延迟', 'package', 'shipping', 'tracking', 'expected to ship', 'not received any update'],
+    keywords: ['物流', '快递', '包裹', '签收', '发货延迟', 'package', 'shipping', 'tracking', 'expected to ship', 'not received any update', '配送状況', '発送状況', '追跡', '配達'],
     reason: '客户查询物流，需要核对物流系统，不能自动承诺到货。',
   },
   {
@@ -132,7 +133,15 @@ const CREDENTIAL_PATTERNS = [
 ];
 
 function normalizeMail(mail) {
-  return `${mail.subject || ''}\n${mail.summary || ''}`.toLowerCase();
+  return [
+    mail.subject,
+    mail.summary,
+    mail.bodyText,
+    mail.body_text,
+    mail.body_plain_text,
+    mail.body,
+    mail.body_preview,
+  ].filter(Boolean).join('\n').toLowerCase();
 }
 
 function includesAny(text, keywords) {
@@ -180,6 +189,7 @@ function makeResult(mail, rule, action, risk, requiresReview, options = {}) {
   const template = ['blocked', 'ignore'].includes(action)
     ? null
     : getTemplateByScene(rule.name);
+  const normalizedContext = options.normalizedContext || normalizeEmailContext(mail);
   const customerLanguage = options.customerLanguage
     || mail.customerLanguage
     || detectCustomerLanguage([
@@ -195,6 +205,8 @@ function makeResult(mail, rule, action, risk, requiresReview, options = {}) {
     reason: rule.reason,
     agentConfig: options.agentConfig,
     customerLanguage,
+    emailPayload: mail,
+    normalizedContext,
   });
   const standardCandidate = replyCandidates.find((candidate) => candidate.variant === 'standard');
 

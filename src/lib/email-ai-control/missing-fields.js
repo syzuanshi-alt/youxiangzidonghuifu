@@ -49,7 +49,7 @@ export function extractMissingFields({
   return {
     missingFields,
     questionToAsk: missingFields.length
-      ? `请补充${missingFields.map((field) => FIELD_LABELS[field] || field).join('、')}，以便人工核对后处理。`
+      ? `麻烦客户补充${missingFields.map((field) => FIELD_LABELS[field] || field).join('、')}。`
       : '',
     missingFieldSeverity,
   };

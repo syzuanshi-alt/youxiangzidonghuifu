@@ -34,6 +34,9 @@ export function renderPrompt({
   risk = {},
   knowledgeBaseRefs = [],
   knowledgeBaseEntries = [],
+  normalizedContext = null,
+  missingFields = null,
+  intent = null,
 } = {}) {
   const template = findPromptTemplate(config, promptType);
   const customerLanguage = emailPayload.customerLanguage || {};
@@ -53,6 +56,17 @@ export function renderPrompt({
       `Body: ${emailPayload.bodyText || emailPayload.body_text || emailPayload.body || emailPayload.summary || ''}`,
       `Spam: ${spam.isSpam ? 'yes' : 'no'}`,
       `Risk: ${risk.level || 'medium'}`,
+      intent?.primaryIntent ? `Detected intent: ${intent.primaryIntent}` : '',
+      normalizedContext?.detectedFields ? [
+        `Detected order numbers: ${(normalizedContext.detectedFields.orderNumbers || []).join(', ') || 'none'}`,
+        `Detected tracking numbers: ${(normalizedContext.detectedFields.trackingNumbers || []).join(', ') || 'none'}`,
+        `Detected emails in customer message: ${(normalizedContext.detectedFields.emails || []).join(', ') || 'none'}`,
+        `Attachment/evidence signal: ${normalizedContext.attachmentSignals?.hasAttachment ? 'actual attachment present' : normalizedContext.attachmentSignals?.mentionedAttachment ? 'mentioned in text' : 'none'}`,
+      ].join('\n') : '',
+      missingFields ? [
+        `Missing fields: ${(missingFields.missingFields || []).join(', ') || 'none'}`,
+        missingFields.questionToAsk ? `Ask only for these missing fields if a customer-facing draft is appropriate: ${missingFields.questionToAsk}` : 'Do not ask the customer to repeat fields already detected above.',
+      ].join('\n') : '',
       `Knowledge refs: ${knowledgeBaseRefs.map((ref) => ref.title).join(', ')}`,
       knowledgeDetails ? `Knowledge base entries:\n${knowledgeDetails}` : '',
     ].filter(Boolean).join('\n'),

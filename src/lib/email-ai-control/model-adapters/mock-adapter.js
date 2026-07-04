@@ -1,11 +1,17 @@
 import { detectCustomerLanguage, translateCustomerMessageToChinese } from '../../../emailTranslation.js';
 import { alignReplyCandidateLanguage } from '../../../replyTemplates.js';
+import {
+  buildReplyContext,
+  customerSharedInfoSummary,
+} from '../../../replyContext.js';
 
 export async function callMockModel({
   mode = 'reply',
   emailPayload = {},
   risk = {},
   knowledgeEntries = [],
+  normalizedContext = null,
+  missingFields = null,
 } = {}) {
   if (mode === 'risk') {
     return {
@@ -25,6 +31,8 @@ export async function callMockModel({
     emailPayload.subject,
     emailPayload.bodyText || emailPayload.body_text || emailPayload.body || emailPayload.summary,
   ].filter(Boolean).join('\n')).text;
+  const replyContext = buildReplyContext({ emailPayload, normalizedContext });
+  const sharedInfo = customerSharedInfoSummary(replyContext);
 
   if (riskLevel === 'high') {
     const knowledgeSuggestion = topKnowledge
@@ -49,11 +57,19 @@ export async function callMockModel({
   }
 
   if (topKnowledge?.standardReply) {
+    const knowledgeTitle = `${topKnowledge.title || ''} ${topKnowledge.category || ''}`.toLowerCase();
+    const alreadyHasOrderInfo = replyContext.hasAnyIdentifier && !(missingFields?.missingFields || []).includes('order_number_or_email');
+    const contextualKnowledgeReply = alreadyHasOrderInfo && /logistics|shipping|订单|物流|包裹|shipment|order/.test(knowledgeTitle)
+      ? {
+        content: `Hello, I can see you already shared ${sharedInfo.en || 'the order information'}. I will use that to check the current order or shipping status on this side. If you have a recent tracking screenshot or platform message, feel free to send it too so I can compare the details.`,
+        contentZh: `您好，我看到您已经提供了${sharedInfo.zh || '订单信息'}。我这边会先按这条信息核对当前订单或物流状态；如果有最新物流截图或平台消息，也可以一起发我，方便对照。`,
+      }
+      : null;
     const alignedKnowledgeReply = alignReplyCandidateLanguage({
       candidateId: 'MOCK-KNOWLEDGE-DRAFT',
       variant: riskLevel === 'low' ? 'standard' : 'conservative',
-      content: topKnowledge.standardReplyEn || topKnowledge.standardReply,
-      contentZh: topKnowledge.standardReplyZh || topKnowledge.standardReply || '',
+      content: contextualKnowledgeReply?.content || topKnowledge.standardReplyEn || topKnowledge.standardReply,
+      contentZh: contextualKnowledgeReply?.contentZh || topKnowledge.standardReplyZh || topKnowledge.standardReply || '',
       language: 'en',
       sendable: true,
       action: riskLevel === 'low' ? 'auto_reply' : 'draft_only',
@@ -73,9 +89,13 @@ export async function callMockModel({
     candidateId: 'MOCK-STANDARD-DRAFT',
     variant: riskLevel === 'low' ? 'standard' : 'conservative',
     content: [
-      'Hello, to help us handle this accurately, please share your order number or order email, the specific issue you need help with, and any relevant screenshots or videos.',
+      replyContext.hasAnyIdentifier
+        ? `Hello, I can see you already shared ${sharedInfo.en || 'the order information'}. Could you also tell me the specific issue you need help with and send any relevant screenshots or videos if available?`
+        : 'Hello, could you please send your order number or order email, the specific issue you need help with, and any relevant screenshots or videos if available?',
     ].join(' '),
-    contentZh: '您好，为了准确处理，请补充订单号或下单邮箱、您需要协助解决的具体问题，以及相关截图或视频。',
+    contentZh: replyContext.hasAnyIdentifier
+      ? `您好，我看到您已经提供了${sharedInfo.zh || '订单信息'}。麻烦您再具体说一下需要我这边协助解决的问题；如果有相关截图或视频，也可以一起发我。`
+      : '您好，麻烦您发一下订单号或下单邮箱、需要我这边协助解决的具体问题；如果有相关截图或视频，也可以一起发我。',
     language: 'en',
     sendable: true,
     action: riskLevel === 'low' ? 'auto_reply' : 'draft_only',

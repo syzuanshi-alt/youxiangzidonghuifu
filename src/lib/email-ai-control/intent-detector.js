@@ -62,7 +62,7 @@ const INTENT_DEFINITIONS = [
   {
     key: 'order_status_query',
     riskFloor: 'medium',
-    keywords: ['order status', 'my order', 'tracking number', 'tracking information', 'pedido', 'envio', '订单状态', '物流单号', '追踪信息'],
+    keywords: ['order status', 'my order', 'tracking number', 'tracking information', 'pedido', 'envio', '订单状态', '物流单号', '追踪信息', '注文状況', '注文番号', '配送状況', '発送状況', '追跡番号'],
   },
   {
     key: 'tax_shipping_fee',
