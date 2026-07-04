@@ -84,6 +84,17 @@ export function getWorkbenchProcessingStatus(mail = {}) {
     };
   }
 
+  if (riskState.spam) {
+    return {
+      status: 'ignored',
+      label: '无需处理',
+      tone: 'ignored',
+      completed: false,
+      urgent: false,
+      ignored: true,
+    };
+  }
+
   if (failed) {
     return {
       status: 'pending',
@@ -130,9 +141,10 @@ export function filterWorkbenchMails(results, filterKey, { reviews = {} } = {}) 
     const riskState = getMailRiskState(mail);
     const completed = processingStatus.status === 'completed';
     const urgent = processingStatus.status === 'urgent';
+    const ignored = processingStatus.status === 'ignored';
 
     if (normalizedFilter === 'all') return true;
-    if (normalizedFilter === 'pending') return !completed;
+    if (normalizedFilter === 'pending') return !completed && !ignored;
     if (normalizedFilter === 'inbox') return !completed && !urgent && !riskState.spam;
     if (normalizedFilter === 'urgent') return urgent;
     if (normalizedFilter === 'completed') return completed;
@@ -144,7 +156,7 @@ export function filterWorkbenchMails(results, filterKey, { reviews = {} } = {}) 
     if (normalizedFilter === 'deleted') return Boolean(mail.deleted || mail.processingStatus?.action === 'delete');
     if (normalizedFilter === 'auto_reply') return !completed && !urgent && riskState.action === 'auto_reply';
     if (normalizedFilter === 'review') return !completed && Boolean(mail.requiresReview || mail.draftRecord?.requiresApproval);
-    if (normalizedFilter === 'spam') return !completed && riskState.spam;
+    if (normalizedFilter === 'spam') return ignored;
     if (normalizedFilter === 'blocked') return !completed && riskState.urgent;
     if (normalizedFilter === 'reviewed') return Boolean(reviews[mail.id]);
     if (normalizedFilter === 'send_blocked') return !completed && mail.sendGuard?.allowed === false;

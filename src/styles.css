@@ -643,6 +643,12 @@ textarea {
   color: var(--green);
 }
 
+.status-pill-ignored {
+  background: var(--white-risk-bg);
+  color: var(--white-risk);
+  border: 1px solid var(--white-risk-line);
+}
+
 .risk-low,
 .action-auto_reply {
   background: var(--green-bg);
@@ -6560,7 +6566,8 @@ body::before {
   color: var(--red);
 }
 
-.risk-spam {
+.risk-spam,
+.status-pill-ignored {
   border-color: rgba(140, 82, 255, 0.56);
   background: rgba(82, 42, 155, 0.18);
   color: var(--violet);

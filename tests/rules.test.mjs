@@ -1282,6 +1282,8 @@ assert.deepEqual(WORKBENCH_FILTERS.map((filter) => filter.key), [
 ]);
 assert.equal(getWorkbenchProcessingStatus(workbenchFilterRows[0]).status, 'pending');
 assert.equal(getWorkbenchProcessingStatus(workbenchFilterRows[2]).status, 'urgent');
+assert.equal(getWorkbenchProcessingStatus(workbenchFilterRows[3]).status, 'ignored');
+assert.equal(getWorkbenchProcessingStatus(workbenchFilterRows[3]).label, '无需处理');
 assert.equal(getWorkbenchProcessingStatus(blockedMediumConflict).status, 'urgent');
 assert.deepEqual(getMailRiskState(blockedMediumConflict), {
   risk: 'high',
@@ -1305,7 +1307,7 @@ assert.equal(shouldReplaceStableRiskSnapshot({ source: 'manual', risk: 'high' },
 assert.equal(shouldReplaceStableRiskSnapshot({ source: 'auto', risk: 'medium' }, { risk: 'high' }, { risk: 'high' }), true);
 assert.deepEqual(
   filterWorkbenchMails(workbenchFilterRows, 'pending').map((mail) => mail.id),
-  ['FILTER-LOW', 'FILTER-MEDIUM', 'FILTER-HIGH', 'FILTER-SPAM'],
+  ['FILTER-LOW', 'FILTER-MEDIUM', 'FILTER-HIGH'],
 );
 assert.deepEqual(
   filterWorkbenchMails(workbenchFilterRows, 'inbox').map((mail) => mail.id),
@@ -1336,6 +1338,26 @@ assert.deepEqual(
   filterWorkbenchMails(workbenchFilterRows, 'spam').map((mail) => mail.id),
   ['FILTER-SPAM'],
 );
+const manuallyOverriddenSpam = {
+  ...draftOnly,
+  id: 'FILTER-MANUAL-SPAM',
+  risk: 'spam',
+  action: 'ignore',
+  riskOverride: {
+    risk: 'spam',
+    source: 'manual',
+    updatedAt: '2026-07-04T00:00:00.000Z',
+  },
+};
+assert.equal(getWorkbenchProcessingStatus(manuallyOverriddenSpam).status, 'ignored');
+assert.deepEqual(
+  filterWorkbenchMails([...workbenchFilterRows, manuallyOverriddenSpam], 'pending').map((mail) => mail.id),
+  ['FILTER-LOW', 'FILTER-MEDIUM', 'FILTER-HIGH'],
+);
+assert.deepEqual(
+  filterWorkbenchMails([...workbenchFilterRows, manuallyOverriddenSpam], 'spam').map((mail) => mail.id),
+  ['FILTER-SPAM', 'FILTER-MANUAL-SPAM'],
+);
 const workbenchMetrics = buildWorkbenchFilterMetrics({
   results: workbenchFilterRows,
   reviews: { 'FILTER-HIGH': { decision: 'reasonable' } },
@@ -1343,7 +1365,7 @@ const workbenchMetrics = buildWorkbenchFilterMetrics({
   sourceStatus: '真实接入',
 });
 assert.equal(workbenchMetrics.find((metric) => metric.key === 'all').count, 4);
-assert.equal(workbenchMetrics.find((metric) => metric.key === 'pending').count, 4);
+assert.equal(workbenchMetrics.find((metric) => metric.key === 'pending').count, 3);
 assert.equal(workbenchMetrics.find((metric) => metric.key === 'urgent').count, 1);
 assert.equal(workbenchMetrics.find((metric) => metric.key === 'completed').count, 0);
 assert.equal(workbenchMetrics.find((metric) => metric.key === 'all').label, 'API 邮件');
@@ -1393,7 +1415,7 @@ assert.deepEqual(
 );
 assert.deepEqual(
   filterWorkbenchMails(workbenchRowsWithCompleted, 'pending').map((mail) => mail.id),
-  ['FILTER-MEDIUM', 'FILTER-SPAM'],
+  ['FILTER-MEDIUM'],
 );
 
 const failedLowRisk = {
@@ -1431,7 +1453,7 @@ assert.deepEqual(
 );
 assert.deepEqual(
   filterWorkbenchMails([...workbenchFilterRows, failedLowRisk], 'pending').map((mail) => mail.id),
-  ['FILTER-LOW', 'FILTER-MEDIUM', 'FILTER-HIGH', 'FILTER-SPAM', 'FILTER-FAILED-LOW'],
+  ['FILTER-LOW', 'FILTER-MEDIUM', 'FILTER-HIGH', 'FILTER-FAILED-LOW'],
 );
 
 assert.ok(API_CONFIG_FIELDS.every((field) => field.secret === false));

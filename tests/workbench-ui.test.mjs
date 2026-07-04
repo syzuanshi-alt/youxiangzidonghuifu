@@ -813,6 +813,23 @@ try {
     const overrides = JSON.parse(localStorage.getItem('feishu-mail-risk-overrides') || '{}');
     return overrides['MAIL-MEDIUM']?.risk === 'medium';
   });
+  await page.locator('input[name="riskOverride"][value="spam"]').check();
+  await page.locator('[data-confirm-risk-override]').click();
+  await page.waitForFunction(() => {
+    const overrides = JSON.parse(localStorage.getItem('feishu-mail-risk-overrides') || '{}');
+    return overrides['MAIL-MEDIUM']?.risk === 'spam';
+  });
+  await page.evaluate(() => window.__workbenchTestHooks.setMailboxFilter('spam'));
+  await waitForText(page, 'Order status SH-TEST-1001');
+  const spamOverrideRow = await page.locator('.mail-row').filter({ hasText: 'Order status SH-TEST-1001' }).first().innerText();
+  assert.match(spamOverrideRow, /垃圾邮件/);
+  assert.match(spamOverrideRow, /无需处理/);
+  assert.doesNotMatch(spamOverrideRow, /待处理/);
+  await page.evaluate(() => window.__workbenchTestHooks.setMailboxFilter('pending'));
+  await page.waitForFunction(() => ![...document.querySelectorAll('.mail-row')]
+    .some((row) => row.textContent.includes('Order status SH-TEST-1001')));
+  await page.evaluate(() => window.__workbenchTestHooks.setMailboxFilter('spam'));
+  await clickMailRow(page, 'Order status SH-TEST-1001');
   await page.locator('.override-choice').filter({ hasText: '恢复系统判定' }).locator('input').check();
   await page.locator('[data-confirm-risk-override]').click();
   await page.waitForFunction(() => {
