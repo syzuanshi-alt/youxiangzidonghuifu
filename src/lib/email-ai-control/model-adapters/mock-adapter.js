@@ -73,10 +73,9 @@ export async function callMockModel({
     candidateId: 'MOCK-STANDARD-DRAFT',
     variant: riskLevel === 'low' ? 'standard' : 'conservative',
     content: [
-      'Hello, thank you for reaching out.',
-      'We have received your message and will review the details carefully before providing confirmed information.',
+      'Hello, to help us handle this accurately, please share your order number or order email, the specific issue you need help with, and any relevant screenshots or videos.',
     ].join(' '),
-    contentZh: '您好，感谢联系。我们已收到您的邮件，会认真核对相关信息后再提供确认回复。',
+    contentZh: '您好，为了准确处理，请补充订单号或下单邮箱、您需要协助解决的具体问题，以及相关截图或视频。',
     language: 'en',
     sendable: true,
     action: riskLevel === 'low' ? 'auto_reply' : 'draft_only',

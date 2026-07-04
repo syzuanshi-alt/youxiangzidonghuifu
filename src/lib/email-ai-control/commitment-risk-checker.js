@@ -21,7 +21,7 @@ const COMMITMENT_PATTERNS = [
   },
   {
     key: 'fabricated_logistics',
-    pattern: /already shipped|tracking number\s+\w+|物流单号|已经发货/i,
+    pattern: /already shipped|tracking number\s*(?:is|:|#)?\s*[A-Z0-9][A-Z0-9-]{5,}|物流单号\s*(?:是|为|:|：)?\s*[A-Z0-9][A-Z0-9-]{5,}|已经发货/i,
     reason: '命中未核实物流事实风险。',
   },
   {

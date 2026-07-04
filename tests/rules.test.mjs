@@ -898,6 +898,41 @@ assert.ok(mediumRiskTemplates.length >= 5);
 assert.ok(mediumRiskTemplates.every((template) => template.action === 'draft_only'));
 assert.ok(mediumRiskTemplates.every((template) => template.requiresReview === true));
 
+const noOpHandoffReplyPattern = /客服(将|会|在|继续|进一步)?.{0,12}(人工)?(核对|确认|查看|处理).{0,12}(回复|跟进)|已收到您的邮件。?为避免信息不准确|support team.{0,40}(review|check|verify).{0,40}(before replying|before responding|follow)/i;
+const customerFacingTemplateText = replyTemplates
+  .map((template) => [
+    template.content,
+    template.contentZh,
+    template.contentEn,
+  ].filter(Boolean).join('\n'))
+  .join('\n\n');
+assert.doesNotMatch(customerFacingTemplateText, noOpHandoffReplyPattern);
+
+const customerFacingCandidates = [
+  ...buildReplyCandidates({
+    template: mediumRiskTemplates[0],
+    action: 'draft_only',
+    risk: 'medium',
+    customerLanguage: detectCustomerLanguage('Hello, can you help me check my order?'),
+  }),
+  ...buildReplyCandidates({
+    template: replyTemplates.find((template) => template.templateId === 'TPL-AMBIGUOUS-001'),
+    action: 'draft_only',
+    risk: 'medium',
+    customerLanguage: detectCustomerLanguage('こんにちは、注文について確認したいです。'),
+  }),
+  ...buildReplyCandidates({
+    action: 'blocked',
+    risk: 'high',
+    category: 'refund',
+    customerLanguage: detectCustomerLanguage('Hola, quiero un reembolso inmediato.'),
+  }),
+].filter((candidate) => candidate.sendable !== false);
+const customerFacingCandidateText = customerFacingCandidates
+  .map((candidate) => [candidate.content, candidate.contentZh].filter(Boolean).join('\n'))
+  .join('\n\n');
+assert.doesNotMatch(customerFacingCandidateText, noOpHandoffReplyPattern);
+
 assert.deepEqual(validateReplyTemplates(replyTemplates), []);
 assert.equal(
   buildReplyCandidates({
@@ -4667,6 +4702,12 @@ try {
   }, mockConfig);
   assert.equal(safetyLogistics.needHumanReview, true);
   assert.ok(safetyLogistics.reasons.some((reason) => /物流|tracking|arrive/i.test(reason)));
+
+  const safetyTrackingInfoRequest = checkOutputSafety({
+    draft: 'Please share your order number, order email, or tracking number so we can check the latest shipping status accurately.',
+    internalSuggestion: '',
+  }, mockConfig);
+  assert.equal(safetyTrackingInfoRequest.blocked, false);
 
   const deepSeekRequests = [];
   const deepSeekReply = await callOpenAIModel({
