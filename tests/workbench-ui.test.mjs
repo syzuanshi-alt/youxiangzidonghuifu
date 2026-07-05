@@ -139,6 +139,72 @@ const fixtureNewHighRiskMail = {
   bodyText: '我需要取消这个订单并退款，请尽快处理。',
 };
 
+const trendTestNow = new Date();
+
+function padDatePart(value) {
+  return String(value).padStart(2, '0');
+}
+
+function trendTestDate(daysAgo = 0, time = '09:00') {
+  const [hour = '09', minute = '00'] = time.split(':');
+  const date = new Date(trendTestNow);
+  date.setHours(Number(hour), Number(minute), 0, 0);
+  date.setDate(date.getDate() - daysAgo);
+  return date;
+}
+
+function formatWorkbenchDateTime(date) {
+  return [
+    date.getFullYear(),
+    padDatePart(date.getMonth() + 1),
+    padDatePart(date.getDate()),
+  ].join('-') + ` ${padDatePart(date.getHours())}:${padDatePart(date.getMinutes())}`;
+}
+
+function formatWorkbenchDateKey(date) {
+  return [
+    date.getFullYear(),
+    padDatePart(date.getMonth() + 1),
+    padDatePart(date.getDate()),
+  ].join('-');
+}
+
+function formatTrendLabel(date) {
+  return `${padDatePart(date.getMonth() + 1)}-${padDatePart(date.getDate())}`;
+}
+
+function expectedRecentTrendDates() {
+  return Array.from({ length: 7 }, (_, index) => trendTestDate(6 - index, '12:00'));
+}
+
+function buildTrendFixtureMails() {
+  const daysByMailId = {
+    'MAIL-HIGH': 0,
+    'MAIL-MEDIUM': 0,
+    'MAIL-LOW': 1,
+    'MAIL-COMPLETED': 0,
+    'MAIL-SPAM': 0,
+    'MAIL-EN-PLACEHOLDER': 2,
+    'MAIL-JA-METADATA': 3,
+    'MAIL-PT-DAMAGED': 4,
+  };
+
+  return fixtureMails.map((mail, index) => {
+    const daysAgo = daysByMailId[mail.id] ?? index;
+    const receivedAt = formatWorkbenchDateTime(trendTestDate(daysAgo, `09:${padDatePart(index)}`));
+    return {
+      ...mail,
+      receivedAt,
+      processingStatus: mail.processingStatus
+        ? {
+          ...mail.processingStatus,
+          completedAt: trendTestDate(daysAgo, `10:${padDatePart(index)}`).toISOString(),
+        }
+        : mail.processingStatus,
+    };
+  });
+}
+
 const writeStatus = {
   writeEnabled: true,
   sendEnabled: true,
@@ -605,7 +671,7 @@ const consoleErrors = [];
 const pageErrors = [];
 const httpErrors = [];
 const mailState = {
-  mails: [...fixtureMails],
+  mails: buildTrendFixtureMails(),
   failMessages: false,
   onMessagesRequest: null,
   requestCount: 0,
@@ -711,6 +777,24 @@ try {
   assert.equal(await page.locator('.overview-trend-point').count(), 0);
   await page.locator('.overview-trend-bar .overview-chart-tooltip').first().waitFor({ state: 'attached', timeout: 2_000 });
   assert.match(await page.locator('.overview-trend-bar .overview-chart-tooltip').first().innerText(), /收到邮件：\d+/);
+  const expectedTrendDates = expectedRecentTrendDates();
+  const expectedTrendLabels = expectedTrendDates.map(formatTrendLabel);
+  const expectedTrendKeys = expectedTrendDates.map(formatWorkbenchDateKey);
+  assert.deepEqual(await page.locator('.overview-trend-label').allInnerTexts(), expectedTrendLabels);
+  const todayKey = expectedTrendKeys.at(-1);
+  const yesterdayKey = expectedTrendKeys.at(-2);
+  const firstTrendKey = expectedTrendKeys[0];
+  const todayReceivedBar = page.locator(`.overview-trend-bar[data-trend-date="${todayKey}"][data-trend-series="received"]`);
+  const todayCompletedBar = page.locator(`.overview-trend-bar[data-trend-date="${todayKey}"][data-trend-series="completed"]`);
+  const todaySpamBar = page.locator(`.overview-trend-bar[data-trend-date="${todayKey}"][data-trend-series="spam"]`);
+  const yesterdayReceivedBar = page.locator(`.overview-trend-bar[data-trend-date="${yesterdayKey}"][data-trend-series="received"]`);
+  assert.equal(await todayReceivedBar.getAttribute('data-trend-value'), '4');
+  assert.equal(await todayCompletedBar.getAttribute('data-trend-value'), '1');
+  assert.equal(await todaySpamBar.getAttribute('data-trend-value'), '1');
+  assert.equal(await yesterdayReceivedBar.getAttribute('data-trend-value'), '1');
+  assert.equal(await page.locator(`.overview-trend-bar[data-trend-date="${firstTrendKey}"][data-trend-series="received"]`).getAttribute('data-tooltip-align'), 'left');
+  assert.equal(await todayReceivedBar.getAttribute('data-tooltip-align'), 'right');
+  assert.match(await todayReceivedBar.locator('.overview-chart-tooltip').innerText(), new RegExp(`${expectedTrendLabels.at(-1)} · 收到邮件：4`));
   assert.equal(await page.locator('.overview-distribution-item .overview-chart-tooltip').count(), 4);
 
   await page.reload({ waitUntil: 'domcontentloaded' });
@@ -748,7 +832,13 @@ try {
       && event.mails.some((mail) => mail.id === 'MAIL-NEW-HIGH')
   ));
   mailState.failMessages = false;
-  mailState.mails = [fixtureNewHighRiskMail, ...fixtureMails];
+  mailState.mails = [
+    {
+      ...fixtureNewHighRiskMail,
+      receivedAt: formatWorkbenchDateTime(trendTestDate(0, '10:00')),
+    },
+    ...buildTrendFixtureMails(),
+  ];
   await page.evaluate(() => window.__workbenchTestHooks.refreshFeishuMessages());
   await newMailRead;
   await page.locator('.mail-toast.is-high').filter({ hasText: '新邮件：客户要求退款' }).waitFor({ state: 'visible', timeout: 3_000 });

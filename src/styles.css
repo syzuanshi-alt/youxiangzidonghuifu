@@ -5657,6 +5657,36 @@ body {
   transform: translate(-50%, 0);
 }
 
+.overview-trend-bar[data-tooltip-align="left"] .overview-chart-tooltip {
+  left: 0;
+  right: auto;
+  transform: translate(0, 4px);
+}
+
+.overview-trend-bar[data-tooltip-align="right"] .overview-chart-tooltip {
+  left: auto;
+  right: 0;
+  transform: translate(0, 4px);
+}
+
+.overview-trend-bar[data-tooltip-align="left"] .overview-chart-tooltip::after {
+  left: 10px;
+  transform: rotate(45deg);
+}
+
+.overview-trend-bar[data-tooltip-align="right"] .overview-chart-tooltip::after {
+  left: auto;
+  right: 10px;
+  transform: rotate(45deg);
+}
+
+.overview-trend-bar[data-tooltip-align="left"]:hover .overview-chart-tooltip,
+.overview-trend-bar[data-tooltip-align="left"]:focus-visible .overview-chart-tooltip,
+.overview-trend-bar[data-tooltip-align="right"]:hover .overview-chart-tooltip,
+.overview-trend-bar[data-tooltip-align="right"]:focus-visible .overview-chart-tooltip {
+  transform: translate(0, 0);
+}
+
 .overview-trend-label {
   display: block;
   overflow: hidden;

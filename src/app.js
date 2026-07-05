@@ -2522,32 +2522,120 @@ function formatOverviewNumber(value = 0) {
   return Number(value || 0).toLocaleString('en-US');
 }
 
-function buildOverviewTrendSeries({
-  totalCount,
-  urgentCount,
-  pendingCount,
-  completedCount,
-  spamCount,
-  deletedCount = 0,
-}) {
-  const labels = ['06-19', '06-20', '06-21', '06-22', '06-23', '06-24', '06-25'];
+function padOverviewDatePart(value) {
+  return String(value).padStart(2, '0');
+}
+
+function formatOverviewDateKey(date) {
+  return [
+    date.getFullYear(),
+    padOverviewDatePart(date.getMonth() + 1),
+    padOverviewDatePart(date.getDate()),
+  ].join('-');
+}
+
+function formatOverviewTrendLabel(date) {
+  return `${padOverviewDatePart(date.getMonth() + 1)}-${padOverviewDatePart(date.getDate())}`;
+}
+
+function parseOverviewDate(value) {
+  if (!value) return null;
+  if (value instanceof Date && !Number.isNaN(value.getTime())) return value;
+
+  const text = String(value).trim();
+  const localMatch = text.match(/^(\d{4})[-/](\d{1,2})[-/](\d{1,2})(?:[ T](\d{1,2}):(\d{1,2})(?::(\d{1,2}))?)?/);
+  if (localMatch) {
+    const [, year, month, day, hour = '0', minute = '0', second = '0'] = localMatch;
+    const date = new Date(
+      Number(year),
+      Number(month) - 1,
+      Number(day),
+      Number(hour),
+      Number(minute),
+      Number(second),
+      0,
+    );
+    return Number.isNaN(date.getTime()) ? null : date;
+  }
+
+  const parsed = new Date(text);
+  return Number.isNaN(parsed.getTime()) ? null : parsed;
+}
+
+function buildOverviewRecentDateBuckets(now = new Date()) {
+  const today = new Date(now);
+  today.setHours(0, 0, 0, 0);
+
+  return Array.from({ length: 7 }, (_, index) => {
+    const date = new Date(today);
+    date.setDate(today.getDate() - (6 - index));
+    return {
+      date,
+      key: formatOverviewDateKey(date),
+      label: formatOverviewTrendLabel(date),
+      received: 0,
+      completed: 0,
+      spam: 0,
+    };
+  });
+}
+
+function incrementOverviewBucket(bucketByKey, date, key) {
+  const dateKey = date ? formatOverviewDateKey(date) : '';
+  const bucket = bucketByKey.get(dateKey);
+  if (bucket) bucket[key] += 1;
+}
+
+function getOverviewProcessedDate(mail = {}) {
+  return parseOverviewDate(
+    mail.processingStatus?.completedAt
+      || mail.processingStatus?.processedAt
+      || mail.processingStatus?.updatedAt
+      || mail.completedAt
+      || mail.processedAt
+      || mail.receivedAt,
+  );
+}
+
+function buildOverviewTrendSeries(results = []) {
+  const buckets = buildOverviewRecentDateBuckets();
+  const bucketByKey = new Map(buckets.map((bucket) => [bucket.key, bucket]));
   const seriesConfig = [
-    { key: 'received', label: '收到邮件', color: '#1769e0', base: totalCount },
-    { key: 'completed', label: '已处理', color: '#17a66a', base: completedCount },
-    { key: 'spam', label: '垃圾邮件', color: '#7c4dff', base: spamCount },
+    { key: 'received', label: '收到邮件', color: '#1769e0' },
+    { key: 'completed', label: '已处理', color: '#17a66a' },
+    { key: 'spam', label: '垃圾邮件', color: '#7c4dff' },
   ];
-  const maxValue = Math.max(totalCount, pendingCount, completedCount, spamCount, deletedCount, urgentCount, 1);
+
+  results.forEach((mail) => {
+    const receivedDate = parseOverviewDate(mail.receivedAt || mail.received_at || mail.createdAt);
+    const processingStatus = getWorkbenchProcessingStatus(mail);
+    const riskState = getMailRiskState(mail);
+
+    incrementOverviewBucket(bucketByKey, receivedDate, 'received');
+    if (processingStatus.status === 'completed') {
+      incrementOverviewBucket(bucketByKey, getOverviewProcessedDate(mail), 'completed');
+    }
+    if (riskState.spam || processingStatus.status === 'ignored') {
+      incrementOverviewBucket(bucketByKey, receivedDate, 'spam');
+    }
+  });
+
+  const maxValue = Math.max(
+    ...buckets.flatMap((bucket) => seriesConfig.map((series) => bucket[series.key] || 0)),
+    1,
+  );
 
   return {
-    labels,
-    series: seriesConfig.map((item, seriesIndex) => ({
+    buckets,
+    labels: buckets.map((bucket) => bucket.label),
+    series: seriesConfig.map((item) => ({
       ...item,
-      points: labels.map((_, index) => {
-        const wave = [0.52, 0.72, 0.76, 0.94, 0.7, 0.64, 0.82][index] || 0.7;
-        const value = Math.max(0, Math.round(item.base * Math.max(0.12, wave - seriesIndex * 0.03)));
+      points: buckets.map((bucket, index) => {
+        const value = bucket[item.key] || 0;
         return {
           value,
-          left: labels.length === 1 ? 0 : (index / (labels.length - 1)) * 100,
+          dateKey: bucket.key,
+          left: buckets.length === 1 ? 0 : (index / (buckets.length - 1)) * 100,
           bottom: Math.max(7, Math.min(92, (value / maxValue) * 86)),
         };
       }),
@@ -2598,19 +2686,19 @@ function renderOverviewDashboard(results) {
     distributionStart += share;
     return segment;
   }).join(', ');
-  const trend = buildOverviewTrendSeries({
-    totalCount,
-    urgentCount,
-    pendingCount,
-    completedCount,
-    spamCount,
-    deletedCount,
-  });
-  const trendBarGroups = trend.labels.map((label, labelIndex) => ({
-    label,
+  const trend = buildOverviewTrendSeries(results);
+  const trendBarGroups = trend.buckets.map((bucket, labelIndex) => ({
+    key: bucket.key,
+    label: bucket.label,
+    tooltipAlign: labelIndex === 0
+      ? 'left'
+      : labelIndex === trend.buckets.length - 1
+        ? 'right'
+        : 'center',
     bars: trend.series.map((series) => {
       const point = series.points[labelIndex] || { value: 0, bottom: 0 };
       return {
+        key: series.key,
         label: series.label,
         value: point.value,
         color: series.color,
@@ -2725,6 +2813,10 @@ function renderOverviewDashboard(results) {
                       title="${displayText(group.label)} ${displayText(bar.label)} ${bar.value}"
                       tabindex="0"
                       aria-label="${displayText(group.label)} ${displayText(bar.label)} ${bar.value}"
+                      data-trend-date="${escapeHtml(group.key)}"
+                      data-trend-series="${escapeHtml(bar.key)}"
+                      data-trend-value="${bar.value}"
+                      data-tooltip-align="${escapeHtml(group.tooltipAlign)}"
                       style="--series-color:${bar.color}; --bar-height:${bar.height}%"
                     >
                       <span class="overview-chart-tooltip">${displayText(group.label)} · ${displayText(bar.label)}：${formatOverviewNumber(bar.value)}</span>
