@@ -390,6 +390,7 @@ let loginDraftAccount = localStorage.getItem(WORKBENCH_REMEMBERED_ACCOUNT_KEY)
 let accountPasswordStatus = '';
 let accountPasswordError = '';
 let accountPasswordChecking = false;
+let accountPasswordPanelOpen = false;
 let captchaConfig = {
   required: false,
   provider: 'disabled',
@@ -1011,35 +1012,38 @@ function renderAccountSession() {
         <strong>${displayText(userLabel)}</strong>
         <small>登录时间：${displayText(loginAt)}</small>
       </div>
-      <div class="account-session-actions">
+      <div class="account-session-actions" data-account-session-actions>
         <button class="secondary-button" type="button" data-switch-workbench-account>切换账号</button>
         <button class="secondary-button" type="button" data-settings-logout-workbench>退出登录</button>
+        <details class="account-password-details" data-account-password-details ${accountPasswordPanelOpen ? 'open' : ''}>
+          <summary class="secondary-button" data-account-password-toggle>修改密码</summary>
+          <form class="account-password-form" data-account-change-password-form>
+            <div>
+              <span>修改密码</span>
+              <strong>需要验证当前密码</strong>
+              <small>修改后旧登录态会失效，当前页面会自动换成新 session。</small>
+            </div>
+            <label>
+              <span>当前密码</span>
+              <input name="currentPassword" type="password" autocomplete="current-password" />
+            </label>
+            <label>
+              <span>新密码</span>
+              <input name="newPassword" type="password" autocomplete="new-password" />
+            </label>
+            <label>
+              <span>确认新密码</span>
+              <input name="confirmPassword" type="password" autocomplete="new-password" />
+            </label>
+            ${accountPasswordError ? `<div class="login-message error">${displayText(accountPasswordError)}</div>` : ''}
+            ${accountPasswordStatus ? `<div class="login-message">${displayText(accountPasswordStatus)}</div>` : ''}
+            <button class="primary-button compact-button" type="submit" ${accountPasswordChecking ? 'disabled' : ''}>
+              ${accountPasswordChecking ? '修改中' : '确认修改密码'}
+            </button>
+          </form>
+        </details>
       </div>
     </div>
-    <form class="account-session-card account-password-form" data-account-change-password-form>
-      <div>
-        <span>修改密码</span>
-        <strong>需要验证当前密码</strong>
-        <small>修改后旧登录态会失效，当前页面会自动换成新 session。</small>
-      </div>
-      <label>
-        <span>当前密码</span>
-        <input name="currentPassword" type="password" autocomplete="current-password" />
-      </label>
-      <label>
-        <span>新密码</span>
-        <input name="newPassword" type="password" autocomplete="new-password" />
-      </label>
-      <label>
-        <span>确认新密码</span>
-        <input name="confirmPassword" type="password" autocomplete="new-password" />
-      </label>
-      ${accountPasswordError ? `<div class="login-message error">${displayText(accountPasswordError)}</div>` : ''}
-      ${accountPasswordStatus ? `<div class="login-message">${displayText(accountPasswordStatus)}</div>` : ''}
-      <button class="primary-button compact-button" type="submit" ${accountPasswordChecking ? 'disabled' : ''}>
-        ${accountPasswordChecking ? '修改中' : '确认修改密码'}
-      </button>
-    </form>
   `;
 
   accountSessionEl.querySelector('[data-switch-workbench-account]')?.addEventListener('click', () => {
@@ -1048,6 +1052,10 @@ function renderAccountSession() {
 
   accountSessionEl.querySelector('[data-settings-logout-workbench]')?.addEventListener('click', () => {
     logoutWorkbench();
+  });
+
+  accountSessionEl.querySelector('[data-account-password-details]')?.addEventListener('toggle', (event) => {
+    accountPasswordPanelOpen = event.currentTarget.open;
   });
 
   accountSessionEl.querySelector('[data-account-change-password-form]')?.addEventListener('submit', async (event) => {
@@ -1061,12 +1069,14 @@ function renderAccountSession() {
     if (!currentPassword || newPassword.length < 8) {
       accountPasswordError = '请输入当前密码，并设置至少 8 位的新密码。';
       accountPasswordStatus = '';
+      accountPasswordPanelOpen = true;
       renderAccountSession();
       return;
     }
     if (newPassword !== confirmPassword) {
       accountPasswordError = '两次输入的新密码不一致。';
       accountPasswordStatus = '';
+      accountPasswordPanelOpen = true;
       renderAccountSession();
       return;
     }
@@ -1074,6 +1084,7 @@ function renderAccountSession() {
     accountPasswordChecking = true;
     accountPasswordError = '';
     accountPasswordStatus = '正在修改密码...';
+    accountPasswordPanelOpen = true;
     renderAccountSession();
 
     try {
@@ -2595,6 +2606,18 @@ function renderOverviewDashboard(results) {
     spamCount,
     deletedCount,
   });
+  const trendBarGroups = trend.labels.map((label, labelIndex) => ({
+    label,
+    bars: trend.series.map((series) => {
+      const point = series.points[labelIndex] || { value: 0, bottom: 0 };
+      return {
+        label: series.label,
+        value: point.value,
+        color: series.color,
+        height: point.value > 0 ? Math.max(4, Math.min(100, point.bottom)) : 0,
+      };
+    }),
+  }));
   const headerCards = [
     {
       key: 'all',
@@ -2692,19 +2715,21 @@ function renderOverviewDashboard(results) {
         </div>
         <div class="overview-trend-chart" aria-label="邮件处理趋势">
           <div class="overview-chart-grid"></div>
-          ${trend.series.map((series) => `
-            <div class="overview-trend-series" style="--series-color:${series.color}">
-              ${series.points.map((point) => `
-                <span
-                  class="overview-trend-point"
-                  title="${displayText(series.label)} ${point.value}"
-                  style="left:${point.left}%; bottom:${point.bottom}%"
-                ></span>
-              `).join('')}
-            </div>
-          `).join('')}
-          <div class="overview-trend-axis">
-            ${trend.labels.map((label) => `<span>${displayText(label)}</span>`).join('')}
+          <div class="overview-trend-bars">
+            ${trendBarGroups.map((group) => `
+              <div class="overview-trend-bar-group">
+                <div class="overview-trend-bar-stack">
+                  ${group.bars.map((bar) => `
+                    <span
+                      class="overview-trend-bar"
+                      title="${displayText(group.label)} ${displayText(bar.label)} ${bar.value}"
+                      style="--series-color:${bar.color}; --bar-height:${bar.height}%"
+                    ></span>
+                  `).join('')}
+                </div>
+                <span class="overview-trend-label">${displayText(group.label)}</span>
+              </div>
+            `).join('')}
           </div>
         </div>
       </section>

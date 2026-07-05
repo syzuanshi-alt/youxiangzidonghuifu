@@ -706,6 +706,9 @@ try {
   assert.equal(storedAccounts, null);
   assert.equal(storedSmsCodes, null);
   assert.equal(rememberedPhone, 'ops.team@example.com');
+  await page.locator('.overview-trend-chart').waitFor({ state: 'visible', timeout: 2_000 });
+  assert.equal(await page.locator('.overview-trend-bar').count() > 0, true);
+  assert.equal(await page.locator('.overview-trend-point').count(), 0);
 
   await page.reload({ waitUntil: 'domcontentloaded' });
   await waitForText(page, '数据总览');
@@ -751,6 +754,13 @@ try {
   await page.locator('[data-overview-open-settings]').first().click();
   await page.locator('[data-settings-primary="account-session"]').click();
   await waitForText(page, '账号与登录');
+  const accountActions = await page.locator('[data-account-session-actions]').evaluate((element) => (
+    Array.from(element.querySelectorAll('button, summary')).map((node) => node.textContent.trim())
+  ));
+  assert.deepEqual(accountActions.slice(0, 3), ['切换账号', '退出登录', '修改密码']);
+  assert.equal(await page.locator('[data-account-change-password-form]').isVisible(), false);
+  await page.locator('[data-account-password-toggle]').click();
+  assert.equal(await page.locator('[data-account-change-password-form]').isVisible(), true);
   await page.locator('[data-account-change-password-form] input[name="currentPassword"]').fill('StrongPass123');
   await page.locator('[data-account-change-password-form] input[name="newPassword"]').fill('ChangedPass123');
   await page.locator('[data-account-change-password-form] input[name="confirmPassword"]').fill('ChangedPass123');

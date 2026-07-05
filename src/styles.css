@@ -4587,10 +4587,34 @@ textarea::placeholder {
   gap: 8px;
 }
 
+.account-password-details {
+  flex: 1 1 100%;
+  min-width: 0;
+}
+
+.account-password-details summary {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 40px;
+  list-style: none;
+  cursor: pointer;
+}
+
+.account-password-details summary::-webkit-details-marker {
+  display: none;
+}
+
 .account-password-form {
+  display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
   align-items: start;
   margin-top: 12px;
+  padding: 14px;
+  border: 1px solid #223a57;
+  border-radius: 8px;
+  background: rgba(7, 24, 43, 0.52);
+  gap: 12px;
 }
 
 .account-password-form > div,
@@ -5548,24 +5572,49 @@ body {
     repeating-linear-gradient(90deg, transparent 0 52px, rgba(23, 105, 224, 0.06) 53px);
 }
 
-.overview-trend-point {
+.overview-trend-bars {
   position: absolute;
-  width: 8px;
-  height: 8px;
-  border: 2px solid #ffffff;
-  border-radius: 50%;
-  background: var(--series-color);
-  box-shadow: 0 0 0 3px rgba(23, 105, 224, 0.14);
-  transform: translate(-50%, 50%);
+  inset: 8px 8px 18px 8px;
+  display: grid;
+  grid-template-columns: repeat(7, minmax(0, 1fr));
+  gap: 9px;
+  align-items: end;
 }
 
-.overview-trend-axis {
-  position: absolute;
-  left: 0;
-  right: 0;
-  bottom: -20px;
+.overview-trend-bar-group {
+  display: grid;
+  grid-template-rows: minmax(0, 1fr) auto;
+  gap: 6px;
+  min-width: 0;
+  height: 100%;
+}
+
+.overview-trend-bar-stack {
   display: flex;
-  justify-content: space-between;
+  align-items: end;
+  justify-content: center;
+  gap: 3px;
+  min-height: 0;
+}
+
+.overview-trend-bar {
+  width: clamp(5px, 1.1vw, 9px);
+  height: var(--bar-height);
+  min-height: 2px;
+  border: 1px solid rgba(255, 255, 255, 0.84);
+  border-radius: 7px 7px 2px 2px;
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.22), rgba(255, 255, 255, 0)),
+    var(--series-color);
+  box-shadow: 0 5px 12px rgba(23, 105, 224, 0.12);
+}
+
+.overview-trend-label {
+  display: block;
+  overflow: hidden;
+  text-align: center;
+  text-overflow: ellipsis;
+  white-space: nowrap;
   color: #71839d;
   font-size: 11px;
 }
@@ -6494,11 +6543,11 @@ body::before {
     repeating-linear-gradient(90deg, transparent 0 51px, rgba(27, 116, 240, 0.14) 52px);
 }
 
-.overview-trend-point {
-  border-color: #07182f;
+.overview-trend-bar {
+  border-color: rgba(7, 24, 47, 0.88);
   box-shadow:
-    0 0 0 3px rgba(20, 120, 255, 0.18),
-    0 0 12px var(--series-color);
+    0 0 0 1px rgba(20, 120, 255, 0.14),
+    0 0 12px rgba(20, 120, 255, 0.18);
 }
 
 .overview-table-head,
