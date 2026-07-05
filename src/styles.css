@@ -5727,22 +5727,28 @@ body {
   box-shadow: inset 0 0 18px rgba(23, 105, 224, 0.08);
 }
 
-.overview-donut span,
-.overview-donut strong {
+.overview-donut-total {
   position: relative;
   z-index: 1;
+  display: grid;
+  gap: 3px;
+  place-items: center;
+  text-align: center;
+  line-height: 1;
 }
 
-.overview-donut span {
-  margin-top: 8px;
+.overview-donut-total span {
+  margin: 0;
   color: #60728d;
   font-size: 12px;
+  font-weight: 800;
 }
 
-.overview-donut strong {
-  margin-top: -18px;
+.overview-donut-total strong {
+  margin: 0;
   color: #14243b;
   font-size: 17px;
+  line-height: 1;
 }
 
 .overview-distribution-list {
@@ -6694,7 +6700,7 @@ body::before {
   background: #06172e;
 }
 
-.overview-donut span,
+.overview-donut-total span,
 .overview-ring span {
   color: #88a7c9;
 }

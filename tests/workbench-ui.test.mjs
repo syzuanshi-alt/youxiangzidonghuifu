@@ -814,6 +814,23 @@ try {
   assert.equal(await todayReceivedBar.getAttribute('data-tooltip-align'), 'right');
   assert.match(await todayReceivedBar.locator('.overview-chart-tooltip').innerText(), new RegExp(`${expectedTrendLabels.at(-1)} · 收到邮件：4`));
   assert.equal(await page.locator('.overview-distribution-item .overview-chart-tooltip').count(), 4);
+  const donutTotalAlignment = await page.locator('.overview-donut').evaluate((donut) => {
+    const total = donut.querySelector('.overview-donut-total');
+    if (!total) return null;
+    const donutRect = donut.getBoundingClientRect();
+    const totalRect = total.getBoundingClientRect();
+    return {
+      centerOffsetX: Math.abs((totalRect.left + totalRect.width / 2) - (donutRect.left + donutRect.width / 2)),
+      centerOffsetY: Math.abs((totalRect.top + totalRect.height / 2) - (donutRect.top + donutRect.height / 2)),
+      label: total.querySelector('span')?.textContent?.trim() || '',
+      value: total.querySelector('strong')?.textContent?.trim() || '',
+    };
+  });
+  assert.notEqual(donutTotalAlignment, null);
+  assert.equal(donutTotalAlignment.label, '总计');
+  assert.match(donutTotalAlignment.value, /^\d+$/);
+  assert.equal(donutTotalAlignment.centerOffsetX <= 1, true);
+  assert.equal(donutTotalAlignment.centerOffsetY <= 1, true);
 
   await page.reload({ waitUntil: 'domcontentloaded' });
   await waitForText(page, '数据总览');

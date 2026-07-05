@@ -2836,8 +2836,10 @@ function renderOverviewDashboard(results) {
         </div>
         <div class="overview-distribution-body">
           <div class="overview-donut" style="--donut:${escapeHtml(distributionGradient)}" tabindex="0">
-            <span>总计</span>
-            <strong>${formatOverviewNumber(distributionDisplayTotal)}</strong>
+            <div class="overview-donut-total">
+              <span>总计</span>
+              <strong>${formatOverviewNumber(distributionDisplayTotal)}</strong>
+            </div>
             <span class="overview-chart-tooltip">处理状态总计：${formatOverviewNumber(distributionDisplayTotal)}</span>
           </div>
           <div class="overview-distribution-list">
