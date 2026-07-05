@@ -5598,6 +5598,8 @@ body {
 }
 
 .overview-trend-bar {
+  position: relative;
+  display: block;
   width: clamp(5px, 1.1vw, 9px);
   height: var(--bar-height);
   min-height: 2px;
@@ -5607,6 +5609,52 @@ body {
     linear-gradient(180deg, rgba(255, 255, 255, 0.22), rgba(255, 255, 255, 0)),
     var(--series-color);
   box-shadow: 0 5px 12px rgba(23, 105, 224, 0.12);
+}
+
+.overview-chart-tooltip {
+  position: absolute;
+  left: 50%;
+  bottom: calc(100% + 8px);
+  z-index: 10;
+  width: max-content;
+  max-width: 190px;
+  padding: 7px 9px;
+  border: 1px solid rgba(23, 105, 224, 0.24);
+  border-radius: 6px;
+  background: rgba(255, 255, 255, 0.96);
+  box-shadow: 0 10px 24px rgba(24, 39, 68, 0.16);
+  color: #172942;
+  font-size: 12px;
+  font-weight: 700;
+  line-height: 1.35;
+  opacity: 0;
+  pointer-events: none;
+  transform: translate(-50%, 4px);
+  transition: opacity 0.16s ease, transform 0.16s ease;
+  white-space: normal;
+}
+
+.overview-chart-tooltip::after {
+  content: "";
+  position: absolute;
+  left: 50%;
+  bottom: -5px;
+  width: 8px;
+  height: 8px;
+  border-right: 1px solid rgba(23, 105, 224, 0.24);
+  border-bottom: 1px solid rgba(23, 105, 224, 0.24);
+  background: rgba(255, 255, 255, 0.96);
+  transform: translateX(-50%) rotate(45deg);
+}
+
+.overview-trend-bar:hover .overview-chart-tooltip,
+.overview-trend-bar:focus-visible .overview-chart-tooltip,
+.overview-donut:hover .overview-chart-tooltip,
+.overview-donut:focus-visible .overview-chart-tooltip,
+.overview-distribution-item:hover .overview-chart-tooltip,
+.overview-distribution-item:focus-visible .overview-chart-tooltip {
+  opacity: 1;
+  transform: translate(-50%, 0);
 }
 
 .overview-trend-label {
@@ -5673,6 +5721,7 @@ body {
 }
 
 .overview-distribution-list div {
+  position: relative;
   display: grid;
   grid-template-columns: 8px minmax(0, 1fr) auto auto;
   gap: 8px;
@@ -6548,6 +6597,18 @@ body::before {
   box-shadow:
     0 0 0 1px rgba(20, 120, 255, 0.14),
     0 0 12px rgba(20, 120, 255, 0.18);
+}
+
+.overview-chart-tooltip {
+  border-color: rgba(70, 150, 255, 0.48);
+  background: rgba(6, 23, 46, 0.98);
+  box-shadow: 0 12px 28px rgba(0, 8, 24, 0.36);
+  color: #eaf4ff;
+}
+
+.overview-chart-tooltip::after {
+  border-color: rgba(70, 150, 255, 0.48);
+  background: rgba(6, 23, 46, 0.98);
 }
 
 .overview-table-head,

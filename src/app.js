@@ -2723,8 +2723,12 @@ function renderOverviewDashboard(results) {
                     <span
                       class="overview-trend-bar"
                       title="${displayText(group.label)} ${displayText(bar.label)} ${bar.value}"
+                      tabindex="0"
+                      aria-label="${displayText(group.label)} ${displayText(bar.label)} ${bar.value}"
                       style="--series-color:${bar.color}; --bar-height:${bar.height}%"
-                    ></span>
+                    >
+                      <span class="overview-chart-tooltip">${displayText(group.label)} · ${displayText(bar.label)}：${formatOverviewNumber(bar.value)}</span>
+                    </span>
                   `).join('')}
                 </div>
                 <span class="overview-trend-label">${displayText(group.label)}</span>
@@ -2739,16 +2743,18 @@ function renderOverviewDashboard(results) {
           <h2>处理状态分布</h2>
         </div>
         <div class="overview-distribution-body">
-          <div class="overview-donut" style="--donut:${escapeHtml(distributionGradient)}">
+          <div class="overview-donut" style="--donut:${escapeHtml(distributionGradient)}" tabindex="0">
             <span>总计</span>
             <strong>${formatOverviewNumber(distributionDisplayTotal)}</strong>
+            <span class="overview-chart-tooltip">处理状态总计：${formatOverviewNumber(distributionDisplayTotal)}</span>
           </div>
           <div class="overview-distribution-list">
             ${distributionItems.map((item) => `
-              <div style="--item-color:${item.color}">
+              <div class="overview-distribution-item" style="--item-color:${item.color}" tabindex="0">
                 <span>${displayText(item.label)}</span>
                 <strong>${formatOverviewNumber(item.value)}</strong>
                 <small>${Math.round((item.value / distributionTotal) * 100)}%</small>
+                <span class="overview-chart-tooltip">${displayText(item.label)}：${formatOverviewNumber(item.value)} · 占比 ${Math.round((item.value / distributionTotal) * 100)}%</span>
               </div>
             `).join('')}
           </div>

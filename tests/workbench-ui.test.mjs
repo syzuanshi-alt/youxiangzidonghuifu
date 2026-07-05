@@ -709,6 +709,9 @@ try {
   await page.locator('.overview-trend-chart').waitFor({ state: 'visible', timeout: 2_000 });
   assert.equal(await page.locator('.overview-trend-bar').count() > 0, true);
   assert.equal(await page.locator('.overview-trend-point').count(), 0);
+  await page.locator('.overview-trend-bar .overview-chart-tooltip').first().waitFor({ state: 'attached', timeout: 2_000 });
+  assert.match(await page.locator('.overview-trend-bar .overview-chart-tooltip').first().innerText(), /收到邮件：\d+/);
+  assert.equal(await page.locator('.overview-distribution-item .overview-chart-tooltip').count(), 4);
 
   await page.reload({ waitUntil: 'domcontentloaded' });
   await waitForText(page, '数据总览');
