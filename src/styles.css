@@ -8299,3 +8299,90 @@ textarea::placeholder {
   background: #e5e3de !important;
   color: #000000 !important;
 }
+
+.settings-panel .settings-primary-item,
+.settings-panel .settings-sub-item,
+.settings-primary-nav .settings-primary-item,
+.settings-secondary-nav .settings-sub-item {
+  border-color: #d7d5d0 !important;
+  background: #f7f6f3 !important;
+  color: #050505 !important;
+  box-shadow: none !important;
+}
+
+.settings-panel .settings-primary-item.active,
+.settings-panel .settings-sub-item.active,
+.settings-panel .settings-primary-item:hover,
+.settings-panel .settings-sub-item:hover,
+.settings-primary-nav .settings-primary-item.active,
+.settings-secondary-nav .settings-sub-item.active {
+  border-color: #111111 !important;
+  background: #ffffff !important;
+  color: #000000 !important;
+  box-shadow: inset 0 0 0 1px #111111 !important;
+}
+
+.settings-panel .settings-primary-item strong,
+.settings-panel .settings-sub-item strong,
+.settings-primary-nav .settings-primary-item strong,
+.settings-secondary-nav .settings-sub-item strong {
+  color: #000000 !important;
+}
+
+.settings-panel .settings-primary-item small,
+.settings-panel .settings-sub-item small,
+.settings-primary-nav .settings-primary-item small,
+.settings-secondary-nav .settings-sub-item small {
+  color: #5e5e5e !important;
+}
+
+.settings-panel .email-ai-readonly-card,
+.settings-panel .email-ai-readonly-card .readonly-model-grid div,
+.settings-panel .email-ai-readonly-card .operator-guide,
+.settings-panel .email-ai-readonly-card .connection-flow-grid div,
+.settings-panel .email-ai-readonly-card .published-guide-status,
+.settings-panel .ai-control-embedded .operator-guide,
+.settings-panel .ai-control-embedded .connection-flow-grid div,
+.settings-panel .ai-control-embedded .published-guide-status,
+.email-ai-readonly-card,
+.email-ai-readonly-card .readonly-model-grid div,
+.email-ai-readonly-card .operator-guide,
+.email-ai-readonly-card .connection-flow-grid div,
+.email-ai-readonly-card .published-guide-status {
+  border-color: #d7d5d0 !important;
+  background: #ffffff !important;
+  color: #050505 !important;
+  box-shadow: 0 10px 28px rgba(0, 0, 0, 0.045) !important;
+}
+
+.settings-panel .email-ai-readonly-card .readonly-card-heading > span,
+.email-ai-readonly-card .readonly-card-heading > span,
+.settings-panel .ai-control-embedded .connection-flow-grid span,
+.settings-panel .email-ai-readonly-card .connection-flow-grid span,
+.settings-panel .ai-control-embedded .published-guide-status span,
+.settings-panel .email-ai-readonly-card .published-guide-status span {
+  border: 1px solid #d7d5d0 !important;
+  background: #f2f1ee !important;
+  color: #050505 !important;
+}
+
+.settings-panel .email-ai-readonly-card h3,
+.settings-panel .email-ai-readonly-card strong,
+.settings-panel .ai-control-embedded .operator-guide-heading strong,
+.settings-panel .ai-control-embedded .connection-flow-grid strong,
+.settings-panel .email-ai-readonly-card .operator-guide-heading strong,
+.settings-panel .email-ai-readonly-card .connection-flow-grid strong {
+  color: #000000 !important;
+}
+
+.settings-panel .email-ai-readonly-card p,
+.settings-panel .email-ai-readonly-card small,
+.settings-panel .email-ai-readonly-card .readonly-model-grid span,
+.settings-panel .email-ai-readonly-card .connection-flow-grid span,
+.settings-panel .email-ai-readonly-card .published-guide-status span,
+.settings-panel .ai-control-embedded .operator-guide-heading small,
+.settings-panel .ai-control-embedded .connection-flow-grid small,
+.settings-panel .email-ai-readonly-card .operator-guide-heading small,
+.settings-panel .email-ai-readonly-card .connection-flow-grid small {
+  color: #5e5e5e !important;
+}

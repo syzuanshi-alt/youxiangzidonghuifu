@@ -996,6 +996,26 @@ try {
   await waitForText(page, '系统规则');
   await page.locator('[data-settings-primary="email-ai-admin-auth"]').click();
   await waitForText(page, '管理员密码');
+  const settingsMonochrome = await page.evaluate(() => {
+    const settingsItem = document.querySelector('.settings-primary-item:not(.active)');
+    const settingsActiveItem = document.querySelector('.settings-primary-item.active');
+    const pick = (element) => {
+      const style = getComputedStyle(element);
+      return {
+        backgroundColor: style.backgroundColor,
+        color: style.color,
+        borderColor: style.borderColor,
+      };
+    };
+    return {
+      settingsItem: pick(settingsItem),
+      settingsActiveItem: pick(settingsActiveItem),
+    };
+  });
+  assert.equal(settingsMonochrome.settingsItem.backgroundColor, 'rgb(247, 246, 243)');
+  assert.equal(settingsMonochrome.settingsItem.color, 'rgb(5, 5, 5)');
+  assert.equal(settingsMonochrome.settingsActiveItem.backgroundColor, 'rgb(255, 255, 255)');
+  assert.equal(settingsMonochrome.settingsActiveItem.color, 'rgb(0, 0, 0)');
   await page.locator('[data-close-settings]').click();
 
   await page.locator('[data-mailbox-search]').fill('');
