@@ -772,7 +772,7 @@ try {
   assert.equal(storedAccounts, null);
   assert.equal(storedSmsCodes, null);
   assert.equal(rememberedPhone, 'ops.team@example.com');
-  const monochromeTheme = await page.evaluate(() => {
+  const blueTheme = await page.evaluate(() => {
     const rootStyle = getComputedStyle(document.documentElement);
     const bodyStyle = getComputedStyle(document.body);
     const overviewPanelStyle = getComputedStyle(document.querySelector('.overview-panel'));
@@ -781,15 +781,15 @@ try {
       blue: rootStyle.getPropertyValue('--blue').trim(),
       bodyBackground: bodyStyle.backgroundColor,
       panelBackground: overviewPanelStyle.backgroundColor,
-      primaryButtonBackground: primaryButtonStyle.backgroundColor,
+      primaryButtonBackgroundImage: primaryButtonStyle.backgroundImage,
       primaryButtonColor: primaryButtonStyle.color,
     };
   });
-  assert.equal(monochromeTheme.blue, '#111111');
-  assert.equal(monochromeTheme.bodyBackground, 'rgb(242, 241, 238)');
-  assert.equal(monochromeTheme.panelBackground, 'rgb(255, 255, 255)');
-  assert.equal(monochromeTheme.primaryButtonBackground, 'rgb(17, 17, 17)');
-  assert.equal(monochromeTheme.primaryButtonColor, 'rgb(255, 255, 255)');
+  assert.equal(blueTheme.blue, '#1478ff');
+  assert.notEqual(blueTheme.bodyBackground, 'rgb(242, 241, 238)');
+  assert.notEqual(blueTheme.panelBackground, 'rgb(255, 255, 255)');
+  assert.match(blueTheme.primaryButtonBackgroundImage, /(rgb|rgba)\(8, 55, 121/);
+  assert.equal(blueTheme.primaryButtonColor, 'rgb(207, 231, 255)');
   await page.locator('.overview-trend-chart').waitFor({ state: 'visible', timeout: 2_000 });
   assert.equal(await page.locator('.overview-trend-bar').count() > 0, true);
   assert.equal(await page.locator('.overview-trend-point').count(), 0);
@@ -996,7 +996,7 @@ try {
   await waitForText(page, '系统规则');
   await page.locator('[data-settings-primary="email-ai-admin-auth"]').click();
   await waitForText(page, '管理员密码');
-  const settingsMonochrome = await page.evaluate(() => {
+  const settingsBlueTheme = await page.evaluate(() => {
     const settingsItem = document.querySelector('.settings-primary-item:not(.active)');
     const settingsActiveItem = document.querySelector('.settings-primary-item.active');
     const pick = (element) => {
@@ -1012,10 +1012,9 @@ try {
       settingsActiveItem: pick(settingsActiveItem),
     };
   });
-  assert.equal(settingsMonochrome.settingsItem.backgroundColor, 'rgb(247, 246, 243)');
-  assert.equal(settingsMonochrome.settingsItem.color, 'rgb(5, 5, 5)');
-  assert.equal(settingsMonochrome.settingsActiveItem.backgroundColor, 'rgb(255, 255, 255)');
-  assert.equal(settingsMonochrome.settingsActiveItem.color, 'rgb(0, 0, 0)');
+  assert.equal(settingsBlueTheme.settingsItem.backgroundColor, 'rgba(3, 14, 29, 0.68)');
+  assert.equal(settingsBlueTheme.settingsItem.color, 'rgb(200, 222, 248)');
+  assert.equal(settingsBlueTheme.settingsActiveItem.color, 'rgb(255, 255, 255)');
   await page.locator('[data-close-settings]').click();
 
   await page.locator('[data-mailbox-search]').fill('');
