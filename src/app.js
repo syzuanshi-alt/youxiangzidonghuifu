@@ -373,6 +373,7 @@ let activeFilter = 'all';
 let mailboxSearchQuery = '';
 let mailboxContactPanelOpen = false;
 let mailboxListPanelOpen = false;
+let advancedMailboxConfigOpen = false;
 let mailboxOpenSections = {
   all: true,
   pending: true,
@@ -3466,93 +3467,171 @@ function renderMailboxSwitcher() {
           : '缺少 refresh token，保存新配置后请打开飞书授权入口。'}</small>
       </div>
 
-      <section class="connection-section mailbox-config-section">
+      <section class="connection-section mailbox-config-section" data-mailbox-binding-basic>
         <div class="connection-section-heading">
-          <strong>飞书应用</strong>
-          <small>更换飞书应用或重置应用密钥时填写。</small>
+          <strong>绑定邮箱</strong>
+          <small>日常只需要填写邮箱账号，保存后打开飞书授权入口。</small>
+        </div>
+        <div class="connection-note">
+          <strong>作用</strong>
+          <span>把当前工作台账号和一个飞书邮箱对应起来。保存后，这个账号只读取、处理和记录这个邮箱的数据。</span>
+        </div>
+        <div class="connection-note">
+          <strong>更换邮箱</strong>
+          <span>把下面的邮箱账号改成新邮箱并保存，然后重新打开飞书授权入口；如果之前授权过别的邮箱，再到高级操作里清空旧授权。</span>
         </div>
         <div class="connection-field-grid">
           <div class="field">
-            <label for="feishu-app-id">App ID <span>更换应用时填</span></label>
-            <input id="feishu-app-id" name="appId" autocomplete="off" placeholder="例：cli_xxxxxxxxxxxxxxxx；不更换应用可留空" />
-            <small>不更换应用可以留空。完整 App ID 不在页面回显。</small>
-          </div>
-          <div class="field">
-            <label for="feishu-app-secret">App Secret <span>重置密钥时填</span></label>
-            <input id="feishu-app-secret" name="appSecret" type="password" autocomplete="new-password" placeholder="粘贴新应用的 App Secret；不修改可留空" />
-            <small>只写入本机服务端配置，不保存到浏览器。</small>
-          </div>
-        </div>
-      </section>
-
-      <section class="connection-section mailbox-config-section">
-        <div class="connection-section-heading">
-          <strong>邮箱账号</strong>
-          <small>工作台读取、回复、归档和报告提醒使用这些地址。</small>
-        </div>
-        <div class="connection-field-grid">
-          <div class="field">
-            <label for="feishu-mailbox-address">工作台邮箱 <span>必填</span></label>
+            <label for="feishu-mailbox-address">邮箱账号 <span>必填</span></label>
             <input id="feishu-mailbox-address" name="mailboxAddress" autocomplete="email" placeholder="例：ayu@vitashinelab.com" value="${escapeHtml(apiState.mailboxAddress || '')}" />
             <small>用于读取邮件、回复和归档。</small>
           </div>
+        </div>
+        <div class="connection-actions">
+          <button class="secondary-button" type="submit">保存邮箱绑定</button>
+          <a class="secondary-button" href="${apiUrl('/oauth/start?state=mail-workbench')}">打开飞书授权入口</a>
+        </div>
+        <small class="field-hint">保存邮箱绑定只保存当前账号的邮箱关系，不会修改程序代码，也不会删除邮件。第一次绑定：先保存邮箱账号，再打开飞书授权入口。</small>
+      </section>
+
+      <details class="connection-section mailbox-config-section advanced-mailbox-config" data-advanced-mailbox-config ${advancedMailboxConfigOpen ? 'open' : ''}>
+        <summary class="connection-section-heading advanced-mailbox-summary" data-reset-auth-details>
+          <strong>高级操作：更换应用 / 报告接收人 / 清空旧授权</strong>
+          <small>日常绑定邮箱不用展开这里。</small>
+        </summary>
+        <div class="connection-note">
+          <strong>什么时候用</strong>
+          <span>只有更换飞书应用、修改报告接收人、授权错了邮箱、或 token 异常需要重新授权时才用这里。</span>
+        </div>
+        <div class="connection-field-grid">
           <div class="field">
             <label for="feishu-bot-report-email">报告接收人 <span>可同邮箱</span></label>
             <input id="feishu-bot-report-email" name="botReportEmail" autocomplete="email" placeholder="例：ayu@vitashinelab.com" value="${escapeHtml(apiState.botReportEmail || apiState.mailboxAddress || '')}" />
-            <small>处理报告和异常提醒会发给这个飞书用户。</small>
+            <small>作用：处理报告和异常提醒会发给这个飞书用户；不影响绑定邮箱。</small>
+          </div>
+          <div class="field">
+            <label for="feishu-app-id">App ID <span>更换飞书应用时填</span></label>
+            <input id="feishu-app-id" name="appId" autocomplete="off" placeholder="例：cli_xxxxxxxxxxxxxxxx；不更换应用可留空" />
+            <small>作用：指定使用哪个飞书开放平台应用。不更换应用必须留空。</small>
+          </div>
+          <div class="field">
+            <label for="feishu-app-secret">App Secret <span>重置应用密钥时填</span></label>
+            <input id="feishu-app-secret" name="appSecret" type="password" autocomplete="new-password" placeholder="粘贴新应用的 App Secret；不修改可留空" />
+            <small>作用：更新飞书应用密钥。只在重置密钥或换应用时填写；不保存到浏览器。</small>
           </div>
         </div>
-      </section>
-
-      <section class="connection-section mailbox-config-section">
-        <div class="connection-section-heading">
-          <strong>保存与授权</strong>
-          <small>保存本机配置后，按需重新打开飞书授权入口。</small>
+        <div class="connection-warning">
+          <strong>清空当前账号已保存的飞书 token</strong>
+          <span>作用是删除当前工作台账号保存的 user_access_token 和 refresh_token，让旧授权立即失效。它不会删除邮件、不会删除账号、不会修改程序代码；清空后必须重新打开飞书授权入口。</span>
         </div>
-        <label class="inline-check connection-check">
-          <input type="checkbox" name="resetAuth" />
-          <span>清空旧授权并重新授权</span>
-        </label>
-        <small class="field-hint">更换 App、邮箱或授权用户时勾选；只改报告接收人不用勾选。</small>
         <div class="connection-actions">
-          <button class="secondary-button" type="submit">保存本地配置</button>
+          <button class="secondary-button" type="button" data-save-advanced-mailbox-config>保存高级配置</button>
+          <button class="secondary-button danger-button" type="button" data-reset-auth-and-save>清空旧授权并重新授权</button>
           <a class="secondary-button" href="${apiUrl('/oauth/start?state=mail-workbench')}">打开飞书授权入口</a>
         </div>
-      </section>
+      </details>
     </form>
   `;
 
-  mailboxSwitcherEl.querySelector('[data-mailbox-switch-form]')?.addEventListener('submit', async (event) => {
-    event.preventDefault();
-    const formData = new FormData(event.currentTarget);
+  const mailboxForm = mailboxSwitcherEl.querySelector('[data-mailbox-switch-form]');
+  const buildMailboxPayload = ({ includeAdvanced = false, resetAuth = false } = {}) => {
+    const formData = new FormData(mailboxForm);
+    const mailboxAddress = String(formData.get('mailboxAddress') || '').trim();
     const payload = {
-      appId: String(formData.get('appId') || '').trim(),
-      appSecret: String(formData.get('appSecret') || '').trim(),
-      mailboxAddress: String(formData.get('mailboxAddress') || '').trim(),
-      botReportEmail: String(formData.get('botReportEmail') || '').trim(),
-      resetAuth: Boolean(formData.get('resetAuth')),
+      mailboxAddress,
+      botReportEmail: String(
+        formData.get('botReportEmail')
+          || apiState.botReportEmail
+          || apiState.mailboxAddress
+          || mailboxAddress
+          || '',
+      ).trim(),
+      resetAuth,
     };
 
+    if (includeAdvanced) {
+      payload.appId = String(formData.get('appId') || '').trim();
+      payload.appSecret = String(formData.get('appSecret') || '').trim();
+    }
+
+    return payload;
+  };
+  const submitMailboxPayload = async (payload, {
+    successTitle = '配置已保存',
+    successMessage = '',
+  } = {}) => {
+    const response = await fetch(apiUrl('/api/feishu/config/update'), {
+      method: 'POST',
+      credentials: 'include',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify(payload),
+    });
+    const result = await response.json();
+    if (result.ok) {
+      if (payload.mailboxAddress) apiState.mailboxAddress = payload.mailboxAddress;
+      if (payload.botReportEmail) apiState.botReportEmail = payload.botReportEmail;
+    }
+    showActionNotice({
+      type: result.ok ? 'success' : 'danger',
+      title: result.ok ? successTitle : '配置保存失败',
+      message: result.ok
+        ? (successMessage || (result.resetAuth ? '配置已保存，请重新打开飞书授权入口。' : '当前账号的邮箱配置已保存。'))
+        : (result.message || result.error || '配置保存失败。'),
+    });
+    loadFeishuApiMessages({ preserveSelection: true });
+    return result;
+  };
+
+  mailboxForm?.addEventListener('submit', async (event) => {
+    event.preventDefault();
+
     try {
-      const response = await fetch(apiUrl('/api/feishu/config/update'), {
-        method: 'POST',
-        credentials: 'include',
-        headers: { 'content-type': 'application/json' },
-        body: JSON.stringify(payload),
+      await submitMailboxPayload(buildMailboxPayload(), {
+        successTitle: '配置已保存',
+        successMessage: '邮箱账号已保存。请按需打开飞书授权入口完成授权。',
       });
-      const result = await response.json();
-      showActionNotice({
-        type: result.ok ? 'success' : 'danger',
-        title: result.ok ? '配置已保存' : '配置保存失败',
-        message: result.ok
-          ? (result.resetAuth ? '邮箱或应用已变更，请重新打开飞书授权入口。' : '当前账号的邮箱配置已保存。')
-          : (result.message || result.error || '配置保存失败。'),
-      });
-      loadFeishuApiMessages({ preserveSelection: true });
     } catch (error) {
       showActionNotice({
         type: 'danger',
         title: '配置保存失败',
+        message: error.message,
+      });
+    }
+  });
+
+  mailboxSwitcherEl.querySelector('[data-advanced-mailbox-config]')?.addEventListener('toggle', (event) => {
+    advancedMailboxConfigOpen = event.currentTarget.open;
+  });
+
+  mailboxSwitcherEl.querySelector('[data-save-advanced-mailbox-config]')?.addEventListener('click', async () => {
+    try {
+      advancedMailboxConfigOpen = true;
+      await submitMailboxPayload(buildMailboxPayload({ includeAdvanced: true }), {
+        successTitle: '高级配置已保存',
+        successMessage: '高级配置已保存；如果更换了 App 或邮箱，请重新打开飞书授权入口。',
+      });
+    } catch (error) {
+      showActionNotice({
+        type: 'danger',
+        title: '高级配置保存失败',
+        message: error.message,
+      });
+    }
+  });
+
+  mailboxSwitcherEl.querySelector('[data-reset-auth-and-save]')?.addEventListener('click', async () => {
+    if (!window.confirm('确认清空当前账号已保存的飞书授权？清空后必须重新打开飞书授权入口。')) return;
+
+    try {
+      advancedMailboxConfigOpen = true;
+      await submitMailboxPayload(buildMailboxPayload({ includeAdvanced: true, resetAuth: true }), {
+        successTitle: '旧授权已清空',
+        successMessage: '已清空当前账号的飞书 token，请重新打开飞书授权入口完成授权。',
+      });
+    } catch (error) {
+      showActionNotice({
+        type: 'danger',
+        title: '清空授权失败',
         message: error.message,
       });
     }
@@ -4283,6 +4362,8 @@ async function loadFeishuApiMessages({ preserveSelection = false } = {}) {
       sourceStatus: statusPayload.sourceStatus || 'API 待接入',
       statusText: statusPayload.configured ? '飞书 API 只读已配置' : 'API 代理可用 · 待配置',
       note: statusPayload.note || '本地 API 代理可用。',
+      mailboxAddress: statusPayload.mailboxAddress || apiState.mailboxAddress || defaultApiState.mailboxAddress || '',
+      botReportEmail: statusPayload.botReportEmail || apiState.botReportEmail || defaultApiState.botReportEmail || '',
     };
 
     if (statusPayload.mailboxBound === false) {

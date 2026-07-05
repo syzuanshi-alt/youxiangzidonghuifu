@@ -3541,6 +3541,41 @@ textarea {
   margin-bottom: 0;
 }
 
+.connection-note,
+.connection-warning {
+  display: grid;
+  gap: 4px;
+  padding: 10px 12px;
+  border-radius: 8px;
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+.connection-note {
+  border: 1px solid rgba(23, 105, 224, 0.18);
+  background: rgba(23, 105, 224, 0.06);
+  color: var(--ink);
+}
+
+.connection-warning {
+  border: 1px solid rgba(220, 38, 38, 0.24);
+  background: rgba(220, 38, 38, 0.08);
+  color: #8f1d1d;
+}
+
+.connection-note strong,
+.connection-warning strong,
+.connection-note span,
+.connection-warning span {
+  display: block;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.advanced-mailbox-summary {
+  cursor: pointer;
+}
+
 .connection-check {
   align-items: flex-start;
   color: var(--ink);
@@ -3566,6 +3601,12 @@ textarea {
   display: inline-flex;
   align-items: center;
   justify-content: center;
+}
+
+.connection-actions .danger-button {
+  border-color: rgba(220, 38, 38, 0.56);
+  color: #b91c1c;
+  background: rgba(220, 38, 38, 0.08);
 }
 
 .library-list {

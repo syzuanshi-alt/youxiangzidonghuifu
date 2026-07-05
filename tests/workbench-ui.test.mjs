@@ -367,6 +367,22 @@ async function installApiRoutes(page, capturedActions, options = {}) {
       return;
     }
 
+    if (path === '/api/feishu/config/update') {
+      const payload = JSON.parse(request.postData() || '{}');
+      capturedActions.push({ type: 'feishu-config-update', payload });
+      await route.fulfill({
+        contentType: 'application/json',
+        body: JSON.stringify({
+          ok: true,
+          action: 'config_update',
+          resetAuth: Boolean(payload.resetAuth),
+          mailboxBound: Boolean(payload.mailboxAddress),
+          updatedKeys: ['tenantMailbox'],
+        }),
+      });
+      return;
+    }
+
     if (path === '/api/email-ai/status') {
       await route.fulfill({
         contentType: 'application/json',
@@ -742,6 +758,42 @@ try {
   await waitForText(page, '密码已修改');
   assert.equal(capturedActions.some((item) => item.type === 'change-password' && item.payload.newPassword === 'ChangedPass123'), true);
 
+  await page.locator('[data-settings-primary="mailbox-switcher"]').click();
+  await waitForText(page, '邮箱与报告机器人');
+  await waitForText(page, '把当前工作台账号和一个飞书邮箱对应起来');
+  await waitForText(page, '保存邮箱绑定只保存当前账号的邮箱关系');
+  const dailyBindingSection = page.locator('[data-mailbox-binding-basic]');
+  assert.equal(await dailyBindingSection.locator('input[name="appId"]').count(), 0);
+  assert.equal(await dailyBindingSection.locator('input[name="appSecret"]').count(), 0);
+  assert.equal(await dailyBindingSection.locator('input[name="botReportEmail"]').count(), 0);
+  assert.equal(await dailyBindingSection.locator('input[name="resetAuth"]').count(), 0);
+  await page.locator('[data-mailbox-switch-form] input[name="mailboxAddress"]').fill('newbox@example.com');
+  await page.locator('[data-mailbox-switch-form] button[type="submit"]').click();
+  await waitForText(page, '配置已保存');
+  const normalConfigUpdate = capturedActions.findLast((item) => item.type === 'feishu-config-update');
+  assert.equal(normalConfigUpdate.payload.mailboxAddress, 'newbox@example.com');
+  assert.equal(normalConfigUpdate.payload.resetAuth, false);
+  await page.locator('[data-reset-auth-details]').click();
+  await waitForText(page, '只有更换飞书应用、修改报告接收人、授权错了邮箱');
+  await waitForText(page, '清空当前账号已保存的飞书 token');
+  await waitForText(page, '它不会删除邮件、不会删除账号、不会修改程序代码');
+  await page.locator('[data-mailbox-switch-form] input[name="botReportEmail"]').fill('ops-report@example.com');
+  await page.locator('[data-save-advanced-mailbox-config]').click();
+  await waitForText(page, '高级配置已保存');
+  const advancedConfigUpdate = capturedActions.findLast((item) => item.type === 'feishu-config-update');
+  assert.equal(advancedConfigUpdate.payload.botReportEmail, 'ops-report@example.com');
+  assert.equal(advancedConfigUpdate.payload.resetAuth, false);
+  await page.evaluate(() => document.querySelectorAll('.action-notice').forEach((node) => node.remove()));
+  await page.locator('[data-advanced-mailbox-config]').evaluate((node) => {
+    node.open = true;
+  });
+  await page.locator('[data-reset-auth-and-save]').click();
+  const resetConfigUpdate = capturedActions.findLast((item) => item.type === 'feishu-config-update');
+  assert.equal(resetConfigUpdate.payload.mailboxAddress, 'newbox@example.com');
+  assert.equal(resetConfigUpdate.payload.resetAuth, true);
+
+  await page.locator('[data-settings-primary="account-session"]').click();
+  await waitForText(page, '账号与登录');
   await page.locator('[data-settings-logout-workbench]').click();
   await waitForText(page, '登录工作台');
   await page.locator('[data-login-mode="reset"]').click();
@@ -766,8 +818,9 @@ try {
   await completedHistoryRow.locator('.status-pill-completed').waitFor({ state: 'visible', timeout: 2_000 });
   assert.match(await completedHistoryRow.innerText(), /已自动回复/);
 
+  await page.locator('[data-mailbox-search]').fill('');
   await page.locator('button[data-mailbox-filter="pending"]').click();
-  await waitForText(page, '我要取消订单并退款');
+  await waitForText(page, '新邮件：客户要求退款');
 
   await page.evaluate(() => window.__workbenchTestHooks.setMailboxFilter('all'));
   await waitForText(page, 'Order status SH-TEST-1001');
