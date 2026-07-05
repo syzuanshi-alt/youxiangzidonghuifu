@@ -772,6 +772,24 @@ try {
   assert.equal(storedAccounts, null);
   assert.equal(storedSmsCodes, null);
   assert.equal(rememberedPhone, 'ops.team@example.com');
+  const monochromeTheme = await page.evaluate(() => {
+    const rootStyle = getComputedStyle(document.documentElement);
+    const bodyStyle = getComputedStyle(document.body);
+    const overviewPanelStyle = getComputedStyle(document.querySelector('.overview-panel'));
+    const primaryButtonStyle = getComputedStyle(document.querySelector('.primary-button'));
+    return {
+      blue: rootStyle.getPropertyValue('--blue').trim(),
+      bodyBackground: bodyStyle.backgroundColor,
+      panelBackground: overviewPanelStyle.backgroundColor,
+      primaryButtonBackground: primaryButtonStyle.backgroundColor,
+      primaryButtonColor: primaryButtonStyle.color,
+    };
+  });
+  assert.equal(monochromeTheme.blue, '#111111');
+  assert.equal(monochromeTheme.bodyBackground, 'rgb(242, 241, 238)');
+  assert.equal(monochromeTheme.panelBackground, 'rgb(255, 255, 255)');
+  assert.equal(monochromeTheme.primaryButtonBackground, 'rgb(17, 17, 17)');
+  assert.equal(monochromeTheme.primaryButtonColor, 'rgb(255, 255, 255)');
   await page.locator('.overview-trend-chart').waitFor({ state: 'visible', timeout: 2_000 });
   assert.equal(await page.locator('.overview-trend-bar').count() > 0, true);
   assert.equal(await page.locator('.overview-trend-point').count(), 0);
