@@ -577,6 +577,11 @@ textarea {
   background: #f4faf7;
 }
 
+.mail-row.status-deleted {
+  border-left-color: #64748b;
+  background: #f4f7fb;
+}
+
 .mail-row.status-urgent {
   border-left-color: var(--red);
 }
@@ -647,6 +652,12 @@ textarea {
   background: var(--white-risk-bg);
   color: var(--white-risk);
   border: 1px solid var(--white-risk-line);
+}
+
+.status-pill-deleted {
+  background: rgba(100, 116, 139, 0.16);
+  color: #475569;
+  border: 1px solid rgba(100, 116, 139, 0.28);
 }
 
 .risk-low,
@@ -5403,6 +5414,11 @@ body {
   color: var(--violet);
 }
 
+.overview-stat-card.deleted .overview-stat-icon,
+.overview-stat-card.deleted small {
+  color: #64748b;
+}
+
 .overview-stat-label {
   color: #304562;
   font-size: 13px;
@@ -6410,6 +6426,11 @@ body::before {
   background: rgba(59, 29, 112, 0.5);
 }
 
+.overview-stat-card.deleted .overview-stat-icon {
+  color: #94a3b8;
+  background: rgba(51, 65, 85, 0.58);
+}
+
 .overview-stat-card.api .overview-stat-icon {
   color: #2d8cff;
   background: rgba(8, 47, 103, 0.58);
@@ -7118,6 +7139,7 @@ body::before {
 .mail-row.status-completed,
 .mail-row.status-pending,
 .mail-row.status-urgent,
+.mail-row.status-deleted,
 .mail-row.status-failed {
   background:
     linear-gradient(145deg, rgba(7, 31, 64, 0.92), rgba(3, 14, 30, 0.98));
@@ -7135,6 +7157,10 @@ body::before {
 .mail-row.status-urgent,
 .mail-row.status-failed {
   box-shadow: inset 4px 0 0 var(--red);
+}
+
+.mail-row.status-deleted {
+  box-shadow: inset 4px 0 0 #64748b;
 }
 
 .mail-row.lane-white {

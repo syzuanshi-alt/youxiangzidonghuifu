@@ -11,5 +11,7 @@ export function hasFailedProcessingStatus(status = null) {
 
 export function chooseProcessingStatus(...statuses) {
   const candidates = statuses.filter(Boolean);
+  const deleted = candidates.find((status) => status?.status === 'deleted' || status?.action === 'delete');
+  if (deleted) return deleted;
   return candidates.find(isCompletedProcessingStatus) || candidates[0] || null;
 }

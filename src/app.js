@@ -154,12 +154,13 @@ const processingStatusText = {
   pending: '待处理',
   urgent: '需紧急处理',
   completed: '已处理',
+  deleted: '已删除',
 };
 
 const FEISHU_WORKBENCH_PAGE_SIZE = 20;
 const FEISHU_WORKBENCH_POLL_INTERVAL_MS = readWorkbenchPollIntervalMs(60_000);
 const MAIL_NOTIFICATION_TTL_MS = 9_000;
-const WORKBENCH_METRIC_ORDER = ['all', 'pending', 'completed', 'spam'];
+const WORKBENCH_METRIC_ORDER = ['all', 'pending', 'completed', 'spam', 'deleted'];
 const WORKBENCH_REMEMBERED_ACCOUNT_KEY = 'email-auto-reply-workbench-remembered-account';
 const WORKBENCH_LEGACY_REMEMBERED_PHONE_KEY = 'email-auto-reply-workbench-remembered-phone';
 const WORKBENCH_RISK_SNAPSHOTS_KEY = 'feishu-mail-risk-snapshots';
@@ -1532,6 +1533,16 @@ function applyCandidateSelection(mail) {
 function processingStatusFromActionResult(result) {
   if (!result) return null;
 
+  if (result.ok && ['delete', 'soft_delete'].includes(result.action)) {
+    return {
+      status: 'deleted',
+      action: 'delete',
+      label: '已删除',
+      completedAt: result.updatedAt || '',
+      deleted: true,
+    };
+  }
+
   const completionActions = [
     'send',
     'archive',
@@ -1868,9 +1879,11 @@ function renderReplyComposer(mail) {
     : selectedCandidate?.content || currentReplyContent(mail);
   const processingStatus = getWorkbenchProcessingStatus(mail);
   const alreadyCompleted = processingStatus.status === 'completed';
+  const alreadyDeleted = processingStatus.status === 'deleted';
   const sendDisabled = alreadyCompleted || !write.sendEnabled || !selectedContent;
   const canArchive = riskState.spam || mail.manualArchive?.checked;
   const archiveDisabled = alreadyCompleted || (!write.archiveEnabled && !mail.manualArchive?.checked);
+  const deleteDisabled = alreadyDeleted;
 
   if (!candidates.length) {
     return `
@@ -1885,11 +1898,20 @@ function renderReplyComposer(mail) {
             <button class="secondary-button action-button" type="button" data-archive-selected ${archiveDisabled ? 'disabled' : ''}>
               确认归档 / 移箱
             </button>
+            <button class="secondary-button action-button" type="button" data-delete-selected ${deleteDisabled ? 'disabled' : ''}>
+              移动到回收站
+            </button>
           </div>
           <p class="muted">${archiveDisabled
             ? '该邮件已完成或服务端归档开关未开启。'
             : '点击后会调用服务端归档接口；手动归档且服务端关闭时会先在工作台本地标记完成。'}</p>
-        ` : ''}
+        ` : `
+          <div class="reply-composer-actions confirm-only-actions">
+            <button class="secondary-button action-button" type="button" data-delete-selected ${deleteDisabled ? 'disabled' : ''}>
+              移动到回收站
+            </button>
+          </div>
+        `}
         ${renderActionResult(result)}
       </section>
     `;
@@ -1920,6 +1942,9 @@ function renderReplyComposer(mail) {
       <div class="reply-composer-actions confirm-only-actions">
         <button class="primary-button action-button" type="button" data-send-selected ${sendDisabled ? 'disabled' : ''}>
           确认真实发送
+        </button>
+        <button class="secondary-button action-button" type="button" data-delete-selected ${deleteDisabled ? 'disabled' : ''}>
+          移动到回收站
         </button>
       </div>
       ${renderActionResult(result)}
@@ -2491,6 +2516,7 @@ function buildOverviewTrendSeries({
   pendingCount,
   completedCount,
   spamCount,
+  deletedCount = 0,
 }) {
   const labels = ['06-19', '06-20', '06-21', '06-22', '06-23', '06-24', '06-25'];
   const seriesConfig = [
@@ -2498,7 +2524,7 @@ function buildOverviewTrendSeries({
     { key: 'completed', label: '已处理', color: '#17a66a', base: completedCount },
     { key: 'spam', label: '垃圾邮件', color: '#7c4dff', base: spamCount },
   ];
-  const maxValue = Math.max(totalCount, pendingCount, completedCount, spamCount, urgentCount, 1);
+  const maxValue = Math.max(totalCount, pendingCount, completedCount, spamCount, deletedCount, urgentCount, 1);
 
   return {
     labels,
@@ -2527,6 +2553,7 @@ function renderOverviewDashboard(results) {
   const pendingCount = metricCount(metrics, 'pending');
   const completedCount = metricCount(metrics, 'completed');
   const spamCount = metricCount(metrics, 'spam');
+  const deletedCount = metricCount(metrics, 'deleted');
   const apiMailCount = metricCount(metrics, 'all') || totalCount;
   const processedRate = totalCount ? Math.round((completedCount / totalCount) * 100) : 0;
   const automationBase = Math.max(pendingCount + completedCount, 1);
@@ -2548,6 +2575,7 @@ function renderOverviewDashboard(results) {
     { label: '待处理', value: pendingCount, color: '#f59e0b' },
     { label: '垃圾邮件', value: spamCount, color: '#7c4dff' },
     { label: '已处理', value: completedCount, color: '#17a66a' },
+    { label: '已删除', value: deletedCount, color: '#64748b' },
   ];
   let distributionStart = 0;
   const distributionDisplayTotal = distributionItems.reduce((sum, item) => sum + item.value, 0);
@@ -2564,6 +2592,7 @@ function renderOverviewDashboard(results) {
     pendingCount,
     completedCount,
     spamCount,
+    deletedCount,
   });
   const headerCards = [
     {
@@ -2597,6 +2626,14 @@ function renderOverviewDashboard(results) {
       delta: '较昨日 ↓ 8.21%',
       badge: '⌫',
       tone: 'spam',
+    },
+    {
+      key: 'deleted',
+      label: '回收站',
+      value: deletedCount,
+      delta: '软删除记录',
+      badge: 'DEL',
+      tone: 'deleted',
     },
   ];
   const aiRows = [
@@ -2861,8 +2898,9 @@ function firstVisibleMailboxMailId(results, filterKey = activeFilter) {
 function mailboxSectionForFilter(filterKey) {
   const normalizedFilter = normalizeWorkbenchFilter(filterKey);
   if (['pending', 'high_risk', 'urgent', 'low_risk', 'medium_risk'].includes(normalizedFilter)) return 'pending';
-  if (normalizedFilter === 'completed' || ['sent', 'archived', 'deleted'].includes(normalizedFilter)) return 'completed';
+  if (normalizedFilter === 'completed' || ['sent', 'archived'].includes(normalizedFilter)) return 'completed';
   if (normalizedFilter === 'spam') return 'spam';
+  if (normalizedFilter === 'deleted') return 'deleted';
   return 'all';
 }
 
@@ -2892,6 +2930,7 @@ function renderMailboxNavigation(results) {
     'pending',
     'completed',
     'spam',
+    'deleted',
   ];
 
   countKeys.forEach((key) => {
@@ -3812,6 +3851,11 @@ function wireReplyComposer(mail) {
     }
     performRealAction('archive', mail);
   });
+
+  detailEl.querySelector('[data-delete-selected]')?.addEventListener('click', () => {
+    if (!window.confirm('确认将这封邮件移动到回收站？这不会执行飞书硬删除。')) return;
+    performSoftDelete(mail);
+  });
 }
 
 async function syncApproval(mail, review) {
@@ -3962,6 +4006,76 @@ async function performRealAction(action, mail, contentOverride = null) {
     showActionNotice({
       type: 'danger',
       title: action === 'archive' ? '归档失败' : '真实发送失败',
+      message: error.message,
+    });
+    render();
+  }
+}
+
+async function performSoftDelete(mail) {
+  try {
+    const response = await fetch(apiUrl('/api/feishu/mail/actions/delete'), {
+      method: 'POST',
+      credentials: 'include',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({
+        mail,
+        actor: 'local-operator',
+      }),
+    });
+    const payload = await response.json();
+    const message = payload.ok
+      ? '邮件已移动到回收站。'
+      : (payload.reasons?.[0] || payload.message || payload.error || '移动到回收站失败。');
+
+    writeActionResults = {
+      ...writeActionResults,
+      [mail.id]: {
+        ok: Boolean(payload.ok),
+        action: 'delete',
+        mode: payload.mode || 'soft_delete',
+        message,
+        updatedAt: new Date().toISOString(),
+      },
+    };
+    saveWriteActionResults();
+    playSoundEffects(soundEffectsForActionResult({
+      ok: Boolean(payload.ok),
+      action: 'delete',
+      mode: payload.mode,
+    }));
+    showActionNotice({
+      type: payload.ok ? 'success' : 'danger',
+      title: payload.ok ? '已移动到回收站' : '移动到回收站失败',
+      message,
+    });
+
+    if (payload.ok) {
+      activeFilter = 'deleted';
+      mailboxOpenSections.deleted = true;
+      selectedId = mail.id;
+    }
+    render();
+  } catch (error) {
+    writeActionResults = {
+      ...writeActionResults,
+      [mail.id]: {
+        ok: false,
+        action: 'delete',
+        mode: 'request_failed',
+        message: error.message,
+        updatedAt: new Date().toISOString(),
+      },
+    };
+    saveWriteActionResults();
+    playSoundEffects(soundEffectsForActionResult({
+      ok: false,
+      action: 'delete',
+      mode: 'request_failed',
+    }));
+    showActionNotice({
+      type: 'danger',
+      title: '移动到回收站失败',
       message: error.message,
     });
     render();

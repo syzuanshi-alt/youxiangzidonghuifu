@@ -9,6 +9,7 @@ export const WORKBENCH_FILTERS = [
   { key: 'pending', label: '待处理', tone: 'metric-pending', note: '未完成' },
   { key: 'completed', label: '已处理', tone: 'metric-completed', note: '已回复/已归档' },
   { key: 'spam', label: '垃圾邮件', tone: 'metric-spam', note: '无需处理' },
+  { key: 'deleted', label: '回收站', tone: 'metric-deleted', note: '已删除' },
 ];
 
 const EXTRA_WORKBENCH_FILTER_KEYS = [
@@ -18,7 +19,6 @@ const EXTRA_WORKBENCH_FILTER_KEYS = [
   'favorite',
   'sent',
   'archived',
-  'deleted',
   'auto_reply',
   'review',
   'blocked',
@@ -53,6 +53,14 @@ function processingAction(mail = {}) {
   return mail.processingStatus?.action || mail.processingStatus?.lastAction || '';
 }
 
+function hasDeletedProcessing(mail = {}) {
+  const action = processingAction(mail);
+  return mail.deleted === true
+    || mail.processingStatus?.status === 'deleted'
+    || action === 'delete'
+    || action === 'soft_delete';
+}
+
 function isArchiveProcessingAction(action = '') {
   return ['archive', 'archived', 'manual_archive', 'auto_archive'].includes(action);
 }
@@ -60,6 +68,17 @@ function isArchiveProcessingAction(action = '') {
 export function getWorkbenchProcessingStatus(mail = {}) {
   const failed = hasFailedProcessing(mail);
   const riskState = getMailRiskState(mail);
+
+  if (hasDeletedProcessing(mail)) {
+    return {
+      status: 'deleted',
+      label: mail.processingStatus?.label || '已删除',
+      tone: 'deleted',
+      completed: false,
+      urgent: false,
+      deleted: true,
+    };
+  }
 
   if (hasCompletedProcessing(mail)) {
     const action = processingAction(mail);
@@ -143,9 +162,10 @@ export function filterWorkbenchMails(results, filterKey, { reviews = {} } = {}) 
     const completed = processingStatus.status === 'completed';
     const urgent = processingStatus.status === 'urgent';
     const ignored = processingStatus.status === 'ignored';
+    const deleted = processingStatus.status === 'deleted';
 
     if (normalizedFilter === 'all') return true;
-    if (normalizedFilter === 'pending') return !completed && !ignored;
+    if (normalizedFilter === 'pending') return !completed && !ignored && !deleted;
     if (normalizedFilter === 'inbox') return true;
     if (normalizedFilter === 'urgent') return urgent;
     if (normalizedFilter === 'completed') return completed;
@@ -154,7 +174,7 @@ export function filterWorkbenchMails(results, filterKey, { reviews = {} } = {}) 
     if (normalizedFilter === 'favorite') return Boolean(mail.favorite || mail.starred);
     if (normalizedFilter === 'sent') return completed && ['send', 'sent', 'auto_send', 'manual_send'].includes(mail.processingStatus?.action || mail.processingStatus?.lastAction || '');
     if (normalizedFilter === 'archived') return completed && ['archive', 'archived', 'manual_archive'].includes(mail.processingStatus?.action || mail.processingStatus?.lastAction || '');
-    if (normalizedFilter === 'deleted') return Boolean(mail.deleted || mail.processingStatus?.action === 'delete');
+    if (normalizedFilter === 'deleted') return deleted;
     if (normalizedFilter === 'auto_reply') return !completed && !urgent && riskState.action === 'auto_reply';
     if (normalizedFilter === 'review') return !completed && Boolean(mail.requiresReview || mail.draftRecord?.requiresApproval);
     if (normalizedFilter === 'spam') return ignored;

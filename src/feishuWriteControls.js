@@ -169,6 +169,7 @@ export function buildPublicFeishuWriteStatus(env = {}) {
     endpoints: {
       send: '/api/feishu/mail/actions/send',
       archive: '/api/feishu/mail/actions/archive',
+      delete: '/api/feishu/mail/actions/delete',
       approve: '/api/feishu/mail/actions/approve',
       process: '/api/feishu/mail/actions/process',
     },
@@ -373,6 +374,7 @@ export function buildWriteAuditEvent({
       messageId: result.messageId || result.message_id || null,
       threadId: result.threadId || result.thread_id || null,
       archived: Boolean(result.archived),
+      deleted: Boolean(result.deleted),
       error: result.error || null,
     },
   };

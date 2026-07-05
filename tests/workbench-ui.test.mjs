@@ -439,18 +439,26 @@ async function installApiRoutes(page, capturedActions, options = {}) {
       return;
     }
 
-    if (path === '/api/feishu/mail/actions/send' || path === '/api/feishu/mail/actions/archive') {
+    if (path === '/api/feishu/mail/actions/send'
+      || path === '/api/feishu/mail/actions/archive'
+      || path === '/api/feishu/mail/actions/delete') {
       const payload = JSON.parse(request.postData() || '{}');
       capturedActions.push({
         path,
         payload,
       });
+      const action = path.endsWith('/archive')
+        ? 'archive'
+        : path.endsWith('/delete')
+          ? 'delete'
+          : 'send';
       await route.fulfill({
         contentType: 'application/json',
         body: JSON.stringify({
           ok: true,
-          action: path.endsWith('/archive') ? 'archive' : 'send',
-          mode: 'ready',
+          action,
+          mode: action === 'delete' ? 'soft_delete' : 'ready',
+          result: action === 'delete' ? { ok: true, deleted: true } : undefined,
         }),
       });
       return;
@@ -695,10 +703,12 @@ try {
   await waitForText(page, '收件箱');
   await waitForText(page, '待处理');
   await waitForText(page, '已处理');
+  await waitForText(page, '回收站');
   assert.equal(await page.locator('[data-mailbox-filter="urgent"]').count(), 0);
   assert.equal(await page.locator('[data-mailbox-filter="low_risk"]').count(), 0);
   assert.equal(await page.locator('[data-mailbox-filter="medium_risk"]').count(), 0);
   assert.equal(await page.locator('[data-mailbox-filter="archived"]').count(), 0);
+  assert.equal(await page.locator('[data-mailbox-filter="deleted"]').count(), 1);
 
   const failedMailRead = waitForNextMailRequest((event) => event.fail === true);
   mailState.failMessages = true;
@@ -898,6 +908,28 @@ try {
   const manuallyArchivedRow = await page.locator('.mail-row').filter({ hasText: 'Order status SH-TEST-1001' }).first().innerText();
   assert.match(manuallyArchivedRow, /已归档/);
   assert.doesNotMatch(manuallyArchivedRow, /垃圾邮件/);
+
+  await page.locator('[data-mailbox-search]').fill('');
+  await page.evaluate(() => window.__workbenchTestHooks.setMailboxFilter('pending'));
+  await page.locator('[data-mailbox-search]').fill('我要取消订单');
+  await clickMailRow(page, '我要取消订单并退款');
+  await page.locator('[data-delete-selected]').click();
+  assert.equal(
+    capturedActions.some((action) => action.path === '/api/feishu/mail/actions/delete'),
+    true,
+    '移动到回收站 should call the soft delete endpoint',
+  );
+  await page.waitForFunction(() => {
+    const results = JSON.parse(localStorage.getItem('feishu-mail-write-action-results') || '{}');
+    return results['MAIL-HIGH']?.ok === true && results['MAIL-HIGH']?.action === 'delete';
+  });
+  await page.evaluate(() => window.__workbenchTestHooks.setMailboxFilter('pending'));
+  await page.waitForFunction(() => ![...document.querySelectorAll('.mail-row')]
+    .some((row) => row.textContent.includes('我要取消订单并退款')));
+  await page.evaluate(() => window.__workbenchTestHooks.setMailboxFilter('deleted'));
+  await waitForText(page, '我要取消订单并退款');
+  const deletedRow = await page.locator('.mail-row').filter({ hasText: '我要取消订单并退款' }).first().innerText();
+  assert.match(deletedRow, /已删除/);
 
   await page.evaluate(async () => {
     localStorage.setItem('email-ai-admin-token', 'admin-secret');

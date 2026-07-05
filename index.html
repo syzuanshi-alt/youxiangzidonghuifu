@@ -4,7 +4,7 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>飞书邮箱自动回复工作台</title>
-    <link rel="stylesheet" href="./src/styles.css?v=tenant-workbench-v1" />
+    <link rel="stylesheet" href="./src/styles.css?v=trash-workbench-v1" />
   </head>
   <body>
     <section class="login-overlay open" data-login-gate aria-label="工作台登录">
@@ -83,6 +83,13 @@
                     <strong data-mailbox-count="spam">0</strong>
                   </button>
                   <div class="mailbox-inline-list" data-mailbox-inline-list="spam" hidden></div>
+                </div>
+                <div class="mailbox-menu-section" data-mailbox-section="deleted">
+                  <button class="mailbox-folder-item" type="button" data-mailbox-section-toggle="deleted" data-mailbox-filter="deleted" aria-expanded="false">
+                    <span>回收站</span>
+                    <strong data-mailbox-count="deleted">0</strong>
+                  </button>
+                  <div class="mailbox-inline-list" data-mailbox-inline-list="deleted" hidden></div>
                 </div>
               </nav>
             </section>
@@ -183,6 +190,6 @@
     <div class="mail-toast-stack" data-mail-toast-stack aria-live="polite" aria-label="新邮件提醒"></div>
     <div class="action-notice-stack" data-action-notice-stack aria-live="polite" aria-label="操作结果提醒"></div>
 
-    <script type="module" src="./src/app.js?v=tenant-workbench-v1"></script>
+    <script type="module" src="./src/app.js?v=trash-workbench-v1"></script>
   </body>
 </html>

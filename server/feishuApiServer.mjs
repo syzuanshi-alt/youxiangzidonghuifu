@@ -692,7 +692,8 @@ function shouldSkipEmailAIProcess(body = {}) {
   const finalAction = String(body.finalAction || mail.finalAction || '').toLowerCase();
 
   return isCompletedProcessingStatus(processingStatus)
-    || ['send', 'sent', 'auto_send', 'manual_send', 'archive', 'archived', 'manual_archive', 'auto_archive'].includes(action)
+    || processingStatus.status === 'deleted'
+    || ['send', 'sent', 'auto_send', 'manual_send', 'archive', 'archived', 'manual_archive', 'auto_archive', 'delete', 'soft_delete'].includes(action)
     || risk === 'spam'
     || ['ignore_spam', 'skipped'].includes(finalAction)
     || mail.noReplyRequired === true
@@ -796,7 +797,7 @@ async function loadProcessedMailKeys(rootDir) {
 
     try {
       const event = JSON.parse(line);
-      const actionDone = ['send', 'archive'].includes(event.action)
+      const actionDone = ['send', 'archive', 'delete'].includes(event.action)
         && event.allowed
         && event.result?.ok;
 
@@ -815,6 +816,18 @@ function buildProcessingStatusFromAuditEvent(event = {}) {
   const action = event.action || '';
   const ok = Boolean(event.allowed && event.result?.ok);
 
+  if (action === 'delete' && ok) {
+    return {
+      status: 'deleted',
+      action: 'delete',
+      label: '已删除',
+      completedAt: event.createdAt || '',
+      actor: event.actor || '',
+      mode: event.mode || '',
+      deleted: true,
+    };
+  }
+
   if (['send', 'archive'].includes(action) && ok) {
     return {
       status: 'completed',
@@ -826,11 +839,11 @@ function buildProcessingStatusFromAuditEvent(event = {}) {
     };
   }
 
-  if (['send', 'archive'].includes(action) && !ok) {
+  if (['send', 'archive', 'delete'].includes(action) && !ok) {
     return {
       status: 'failed',
       action,
-      label: action === 'archive' ? '归档失败' : '发送失败',
+      label: action === 'archive' ? '归档失败' : action === 'delete' ? '删除失败' : '发送失败',
       completedAt: event.createdAt || '',
       actor: event.actor || '',
       mode: event.mode || '',
@@ -1609,6 +1622,49 @@ async function executeWriteAction({
       result,
       realSendEnabled: action === 'send',
       realArchiveEnabled: action === 'archive',
+      paymentActionAllowed: false,
+      orderActionAllowed: false,
+    },
+  };
+}
+
+async function executeSoftDeleteAction({
+  body,
+  auditWriter,
+  rootDir,
+}) {
+  const mail = body.mail || {};
+  const actor = body.actor || 'local-operator';
+  const decision = {
+    action: 'delete',
+    allowed: true,
+    mode: 'soft_delete',
+    reasons: ['仅移动到工作台回收站，不执行飞书硬删除。'],
+  };
+  const result = {
+    ok: true,
+    deleted: true,
+  };
+  const auditEvent = buildWriteAuditEvent({
+    action: 'delete',
+    mail,
+    decision,
+    actor,
+    result,
+  });
+  await auditWriter(auditEvent, { rootDir });
+
+  return {
+    statusCode: 200,
+    payload: {
+      ok: true,
+      action: 'delete',
+      mode: 'soft_delete',
+      result,
+      message: '邮件已移动到工作台回收站；未执行飞书硬删除。',
+      realSendEnabled: false,
+      realArchiveEnabled: false,
+      hardDeleteEnabled: false,
       paymentActionAllowed: false,
       orderActionAllowed: false,
     },
@@ -2945,6 +3001,23 @@ export function createFeishuApiServer({
           env: tenantContext.tenantEnv,
           envInfo: tenantContext.tenantEnvInfo,
           fetchImpl,
+          auditWriter,
+          rootDir: tenantContext.runtimeRoot,
+        });
+        sendJson(response, result.statusCode, result.payload);
+        return;
+      }
+
+      if (requestUrl.pathname === '/api/feishu/mail/actions/delete') {
+        if (request.method !== 'POST') {
+          sendMethodNotAllowed(response);
+          return;
+        }
+        const tenantContext = await requireTenantMailboxBinding(request, response);
+        if (!tenantContext) return;
+        const body = await readJsonBody(request);
+        const result = await executeSoftDeleteAction({
+          body,
           auditWriter,
           rootDir: tenantContext.runtimeRoot,
         });

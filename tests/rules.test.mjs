@@ -1278,17 +1278,33 @@ assert.deepEqual(WORKBENCH_FILTERS.map((filter) => filter.key), [
   'pending',
   'completed',
   'spam',
+  'deleted',
 ]);
 assert.deepEqual(WORKBENCH_FILTERS.map((filter) => filter.label), [
   '收件箱',
   '待处理',
   '已处理',
   '垃圾邮件',
+  '回收站',
 ]);
+const deletedWorkbenchMail = {
+  ...lowRisk,
+  id: 'FILTER-DELETED',
+  processingStatus: {
+    status: 'deleted',
+    action: 'delete',
+    label: '已删除',
+    completedAt: '2026-07-05T08:00:00.000Z',
+  },
+};
 assert.equal(getWorkbenchProcessingStatus(workbenchFilterRows[0]).status, 'pending');
 assert.equal(getWorkbenchProcessingStatus(workbenchFilterRows[2]).status, 'urgent');
 assert.equal(getWorkbenchProcessingStatus(workbenchFilterRows[3]).status, 'ignored');
 assert.equal(getWorkbenchProcessingStatus(workbenchFilterRows[3]).label, '无需处理');
+assert.equal(getWorkbenchProcessingStatus(deletedWorkbenchMail).status, 'deleted');
+assert.equal(getWorkbenchProcessingStatus(deletedWorkbenchMail).label, '已删除');
+assert.equal(filterWorkbenchMails([deletedWorkbenchMail], 'pending').length, 0);
+assert.equal(filterWorkbenchMails([deletedWorkbenchMail], 'deleted').length, 1);
 assert.equal(getWorkbenchProcessingStatus(blockedMediumConflict).status, 'urgent');
 assert.deepEqual(getMailRiskState(blockedMediumConflict), {
   risk: 'high',
@@ -3234,6 +3250,29 @@ await withTestServer(createFeishuApiServer({
   assert.equal(archivePayload.result.archived, true);
   assert.match(writeFetchCalls[2].url, /\/messages\/batch_modify/);
 
+  const fetchCallCountBeforeDelete = writeFetchCalls.length;
+  const deleteResponse = await fetch(`${baseUrl}/api/feishu/mail/actions/delete`, {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({
+      mail: {
+        ...lowRisk,
+        id: 'soft-delete-001',
+        messageId: 'om_delete_001',
+      },
+      actor: 'operator@example.test',
+    }),
+  });
+  const deletePayload = await deleteResponse.json();
+  assert.equal(deleteResponse.status, 200);
+  assert.equal(deletePayload.ok, true);
+  assert.equal(deletePayload.action, 'delete');
+  assert.equal(deletePayload.mode, 'soft_delete');
+  assert.equal(deletePayload.result.deleted, true);
+  assert.equal(deletePayload.hardDeleteEnabled, false);
+  assert.equal(writeFetchCalls.length, fetchCallCountBeforeDelete);
+  assert.equal(writeAuditEvents.some((event) => event.action === 'delete' && event.result?.deleted === true), true);
+
   const approveResponse = await fetch(`${baseUrl}/api/feishu/mail/actions/approve`, {
     method: 'POST',
     headers: { 'content-type': 'application/json' },
@@ -3247,8 +3286,8 @@ await withTestServer(createFeishuApiServer({
   assert.equal(approveResponse.status, 200);
   assert.equal(approvePayload.ok, true);
   assert.equal(approvePayload.action, 'approve');
-  assert.equal(writeAuditEvents.length, 4);
-  assert.equal(writeAuditEvents.filter((event) => event.allowed).length, 4);
+  assert.equal(writeAuditEvents.length, 5);
+  assert.equal(writeAuditEvents.filter((event) => event.allowed).length, 5);
   assert.equal(JSON.stringify(writeAuditEvents).includes('user-token-should-not-leak'), false);
 });
 
@@ -5149,12 +5188,15 @@ assert.ok(indexHtml.includes('data-mailbox-section="all"'));
 assert.ok(indexHtml.includes('data-mailbox-section="pending"'));
 assert.ok(indexHtml.includes('data-mailbox-section="completed"'));
 assert.ok(indexHtml.includes('data-mailbox-section="spam"'));
+assert.ok(indexHtml.includes('data-mailbox-section="deleted"'));
 assert.ok(indexHtml.indexOf('data-mailbox-section="all"') < indexHtml.indexOf('data-mailbox-section="pending"'));
 assert.ok(indexHtml.indexOf('data-mailbox-section="pending"') < indexHtml.indexOf('data-mailbox-section="completed"'));
 assert.ok(indexHtml.indexOf('data-mailbox-section="completed"') < indexHtml.indexOf('data-mailbox-section="spam"'));
+assert.ok(indexHtml.indexOf('data-mailbox-section="spam"') < indexHtml.indexOf('data-mailbox-section="deleted"'));
 assert.ok(indexHtml.includes('data-mailbox-filter="all"'));
 assert.ok(indexHtml.includes('data-mailbox-filter="pending"'));
 assert.ok(indexHtml.includes('data-mailbox-filter="completed"'));
+assert.ok(indexHtml.includes('data-mailbox-filter="deleted"'));
 assert.equal(indexHtml.includes('data-mailbox-filter="urgent"'), false);
 assert.equal(indexHtml.includes('data-mailbox-filter="inbox"'), false);
 assert.equal(indexHtml.includes('data-mailbox-submenu="inbox"'), false);
@@ -5163,16 +5205,15 @@ assert.equal(indexHtml.includes('data-mailbox-count="high_risk"'), false);
 assert.equal(indexHtml.includes('data-mailbox-filter="favorite"'), false);
 assert.equal(indexHtml.includes('data-mailbox-filter="sent"'), false);
 assert.equal(indexHtml.includes('data-mailbox-filter="archived"'), false);
-assert.equal(indexHtml.includes('data-mailbox-filter="deleted"'), false);
 assert.ok(indexHtml.includes('data-mailbox-filter="spam"'));
 assert.ok(indexHtml.includes('data-mailbox-inline-list="all"'));
 assert.ok(indexHtml.includes('data-mailbox-inline-list="pending"'));
 assert.ok(indexHtml.includes('data-mailbox-inline-list="completed"'));
+assert.ok(indexHtml.includes('data-mailbox-inline-list="deleted"'));
 assert.equal(indexHtml.includes('data-mailbox-inline-list="urgent"'), false);
 assert.equal(indexHtml.includes('data-mailbox-inline-list="inbox"'), false);
 assert.equal(indexHtml.includes('data-mailbox-inline-list="sent"'), false);
 assert.equal(indexHtml.includes('data-mailbox-inline-list="archived"'), false);
-assert.equal(indexHtml.includes('data-mailbox-inline-list="deleted"'), false);
 assert.ok(indexHtml.includes('data-mailbox-inline-list="spam"'));
 assert.ok(indexHtml.includes('data-action-notice-stack'));
 assert.equal(indexHtml.includes('写邮件'), false);
