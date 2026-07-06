@@ -5,6 +5,33 @@ import {
   customerSharedInfoSummary,
 } from '../../../replyContext.js';
 
+function factAwareContent(replyContext = {}, {
+  riskLevel = 'medium',
+} = {}) {
+  const shared = customerSharedInfoSummary(replyContext);
+  const hasFacts = replyContext.hasActionableIssueFacts;
+  if (hasFacts) {
+    return {
+      content: `Hello, I can see you already shared ${shared.en || 'the order information'} and mentioned that the product or package arrived damaged. I also understand you would like to return or exchange it. If you have photos, videos, screenshots, or platform messages showing the issue, feel free to send them too so I can review everything together.`,
+      contentZh: `您好，我看到您已经提供了${shared.zh || '订单信息'}，也说明商品或包裹到货损坏，并希望退货或换货。如果有能展示问题的照片、视频、截图或平台消息，也可以一起发我，我这边方便完整核对。`,
+    };
+  }
+  if (replyContext.hasAnyIdentifier) {
+    return {
+      content: `Hello, I can see you already shared ${shared.en || 'the order information'}. Could you also tell me the specific issue you need help with and send any relevant screenshots or videos if available?`,
+      contentZh: `您好，我看到您已经提供了${shared.zh || '订单信息'}。麻烦您再具体说一下需要我这边协助解决的问题；如果有相关截图或视频，也可以一起发我。`,
+    };
+  }
+  return {
+    content: riskLevel === 'high'
+      ? 'Hello, I’m sorry this has caused concern. To help me check this accurately, could you please send your order number or order email, along with any photos, videos, screenshots, or platform messages that show the issue? I’ll review the details based on the information you provide.'
+      : 'Hello, could you please send your order number or order email, the specific issue you need help with, and any relevant screenshots or videos if available?',
+    contentZh: riskLevel === 'high'
+      ? '您好，很抱歉这件事给您带来困扰。为了准确核对，麻烦您发一下订单号或下单邮箱，以及能展示问题的照片、视频、截图或平台消息。我会根据您提供的信息继续确认。'
+      : '您好，麻烦您发一下订单号或下单邮箱、需要我这边协助解决的具体问题；如果有相关截图或视频，也可以一起发我。',
+  };
+}
+
 export async function callMockModel({
   mode = 'reply',
   emailPayload = {},
@@ -35,15 +62,12 @@ export async function callMockModel({
   const sharedInfo = customerSharedInfoSummary(replyContext);
 
   if (riskLevel === 'high') {
+    const factAware = factAwareContent(replyContext, { riskLevel });
     const highRiskDraft = alignReplyCandidateLanguage({
       candidateId: 'MOCK-HIGH-RISK-RECOMMENDED',
       variant: 'recommended',
-      content: replyContext.hasAnyIdentifier
-        ? `Hello, I’m sorry this has caused concern. I can see you already shared ${sharedInfo.en || 'the order information'}. I’ll use that to review the case first; if you have photos, videos, screenshots, or platform messages that show the issue, feel free to send them too so I can check everything together.`
-        : 'Hello, I’m sorry this has caused concern. To help me check this accurately, could you please send your order number or order email, along with any photos, videos, screenshots, or platform messages that show the issue? I’ll review the details based on the information you provide.',
-      contentZh: replyContext.hasAnyIdentifier
-        ? `您好，很抱歉这件事给您带来困扰。我看到您已经提供了${sharedInfo.zh || '订单信息'}。我这边会先按这些信息核对；如果有能展示问题的照片、视频、截图或平台消息，也可以一起发我，方便完整对照。`
-        : '您好，很抱歉这件事给您带来困扰。为了准确核对，麻烦您发一下订单号或下单邮箱，以及能展示问题的照片、视频、截图或平台消息。我会根据您提供的信息继续确认。',
+      content: factAware.content,
+      contentZh: factAware.contentZh,
       language: 'en',
       sendable: true,
       action: 'blocked',
@@ -101,17 +125,12 @@ export async function callMockModel({
     };
   }
 
+  const factAware = factAwareContent(replyContext, { riskLevel });
   const alignedDraft = alignReplyCandidateLanguage({
     candidateId: 'MOCK-STANDARD-DRAFT',
     variant: riskLevel === 'low' ? 'standard' : 'conservative',
-    content: [
-      replyContext.hasAnyIdentifier
-        ? `Hello, I can see you already shared ${sharedInfo.en || 'the order information'}. Could you also tell me the specific issue you need help with and send any relevant screenshots or videos if available?`
-        : 'Hello, could you please send your order number or order email, the specific issue you need help with, and any relevant screenshots or videos if available?',
-    ].join(' '),
-    contentZh: replyContext.hasAnyIdentifier
-      ? `您好，我看到您已经提供了${sharedInfo.zh || '订单信息'}。麻烦您再具体说一下需要我这边协助解决的问题；如果有相关截图或视频，也可以一起发我。`
-      : '您好，麻烦您发一下订单号或下单邮箱、需要我这边协助解决的具体问题；如果有相关截图或视频，也可以一起发我。',
+    content: factAware.content,
+    contentZh: factAware.contentZh,
     language: 'en',
     sendable: true,
     action: riskLevel === 'low' ? 'auto_reply' : 'draft_only',

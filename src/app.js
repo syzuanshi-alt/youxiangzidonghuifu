@@ -82,7 +82,7 @@ import {
   readJsonPayload,
 } from './httpResponse.js';
 
-const REPLY_DRAFT_SCHEMA_VERSION = 'single-recommended-v1';
+const REPLY_DRAFT_SCHEMA_VERSION = 'fact-grounded-replies-v2';
 const REPLY_DRAFT_SCHEMA_VERSION_KEY = 'feishu-mail-reply-draft-schema-version';
 const CANDIDATE_SELECTIONS_KEY = 'feishu-mail-candidate-selections';
 
@@ -523,6 +523,7 @@ function loadCandidateSelections() {
   try {
     if (localStorage.getItem(REPLY_DRAFT_SCHEMA_VERSION_KEY) !== REPLY_DRAFT_SCHEMA_VERSION) {
       localStorage.removeItem(CANDIDATE_SELECTIONS_KEY);
+      localStorage.removeItem(WORKBENCH_RISK_SNAPSHOTS_KEY);
       localStorage.setItem(REPLY_DRAFT_SCHEMA_VERSION_KEY, REPLY_DRAFT_SCHEMA_VERSION);
       return {};
     }
@@ -1435,6 +1436,7 @@ function buildRiskSnapshot(mail = {}, source = 'auto') {
     templateSelectionReason: mail.templateSelectionReason || '',
     customerLanguage: mail.customerLanguage || null,
     customerLanguageCode: mail.customerLanguageCode || mail.customerLanguage?.code || '',
+    replyDraftSchemaVersion: REPLY_DRAFT_SCHEMA_VERSION,
     updatedAt: new Date().toISOString(),
   };
 }
@@ -1451,6 +1453,7 @@ function applyStableRiskSnapshot(mail = {}, riskOverride = null) {
         ...normalizeMailRiskSnapshot(existing),
       }
     : null;
+  const existingReplyDraftCompatible = normalizedExisting?.replyDraftSchemaVersion === REPLY_DRAFT_SCHEMA_VERSION;
 
   if (shouldReplaceStableRiskSnapshot(normalizedExisting, nextSnapshot, riskOverride)) {
     riskSnapshots = {
@@ -1484,8 +1487,8 @@ function applyStableRiskSnapshot(mail = {}, riskOverride = null) {
     category: normalizedExisting.category || mail.category,
     requiresReview: typeof normalizedExisting.requiresReview === 'boolean' ? normalizedExisting.requiresReview : mail.requiresReview,
     reason: normalizedExisting.reason || mail.reason,
-    replyDraft: normalizedExisting.replyDraft || mail.replyDraft,
-    replyCandidates: normalizedExisting.replyCandidates || mail.replyCandidates,
+    replyDraft: existingReplyDraftCompatible ? (normalizedExisting.replyDraft || mail.replyDraft) : mail.replyDraft,
+    replyCandidates: existingReplyDraftCompatible ? (normalizedExisting.replyCandidates || mail.replyCandidates) : mail.replyCandidates,
     templateId: normalizedExisting.templateId || mail.templateId,
     templateSource: normalizedExisting.templateSource || mail.templateSource,
     templateSelectionReason: normalizedExisting.templateSelectionReason || mail.templateSelectionReason,

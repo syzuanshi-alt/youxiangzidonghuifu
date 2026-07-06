@@ -27,7 +27,7 @@ function hasEvidence(normalizedContext = {}) {
 }
 
 function hasDesiredResolution(text = '') {
-  return /refund|return|exchange|replace|退款|退货|换货|补发|赔偿/.test(text);
+  return /refund|return|exchange|replace|devolver|trocar|cambiar|retour|echange|echanger|restituire|umtauschen|iade|退款|退货|换货|补发|赔偿|返品|交換/.test(text);
 }
 
 export function extractMissingFields({
@@ -36,12 +36,13 @@ export function extractMissingFields({
 } = {}) {
   const required = FIELD_REQUIREMENTS[intent.primaryIntent] || [];
   const text = normalizedContext.normalizedText || '';
+  const facts = normalizedContext.customerFacts || {};
   const missingFields = required.filter((field) => {
     if (field === 'order_number_or_email') return !hasOrderIdentifier(normalizedContext);
     if (field === 'package_photo_or_platform_screenshot') return !hasEvidence(normalizedContext);
     if (field === 'issue_photo_or_video') return !hasEvidence(normalizedContext);
-    if (field === 'desired_resolution') return !hasDesiredResolution(text);
-    if (field === 'return_reason') return !/because|reason|原因|不喜欢|不符合|defective|quality/.test(text);
+    if (field === 'desired_resolution') return !(facts.hasDesiredResolution || hasDesiredResolution(text));
+    if (field === 'return_reason') return !(facts.hasDamageIssue || /because|reason|原因|不喜欢|不符合|defective|quality|damag|danific|破损|损坏|返品/.test(text));
     return false;
   });
 

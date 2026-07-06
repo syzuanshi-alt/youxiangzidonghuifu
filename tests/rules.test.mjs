@@ -487,6 +487,15 @@ globalOrderNumberSamples.forEach(([body, expected]) => {
   const context = normalizeEmailContext({ body });
   assert.ok(context.detectedFields.orderNumbers.includes(expected), `${body} should detect ${expected}`);
 });
+const portugueseDamagedReturnContext = normalizeEmailContext({
+  body: 'Olá, meu pedido VS 75209 chegou danificado. Quero devolver ou trocar o produto.',
+});
+assert.equal(portugueseDamagedReturnContext.customerFacts.hasDamageIssue, true);
+assert.equal(portugueseDamagedReturnContext.customerFacts.hasReturnRequest, true);
+assert.equal(portugueseDamagedReturnContext.customerFacts.hasExchangeRequest, true);
+assert.match(portugueseDamagedReturnContext.customerFacts.factsZh, /VS-75209/);
+assert.match(portugueseDamagedReturnContext.customerFacts.factsZh, /损坏|破损/);
+assert.match(portugueseDamagedReturnContext.customerFacts.factsZh, /退货|换货/);
 
 const translatedOrderMessage = translateCustomerMessageToChinese('Hello, I want to check my order status but I do not have the order number.');
 assert.match(translatedOrderMessage.text, /订单/);
@@ -4858,9 +4867,12 @@ try {
     source: 'email_auto_reply_workbench',
   }, { repository });
   assert.equal(globalOrderAIResultWithSpacedOrder.success, true);
+  assert.equal(globalOrderAIResultWithSpacedOrder.intent.primaryIntent, 'return');
   assert.ok(!globalOrderAIResultWithSpacedOrder.missingFields.missingFields.includes('order_number_or_email'));
-  assert.doesNotMatch(globalOrderAIResultWithSpacedOrder.reply.draft, /send your order number|provide your order number|numero do pedido|número do pedido|订单号|下单邮箱/i);
+  assert.doesNotMatch(globalOrderAIResultWithSpacedOrder.reply.draft, /send your order number|provide your order number|numero do pedido|número do pedido|订单号|下单邮箱|problema especifico|problema específico|specific issue/i);
   assert.match(globalOrderAIResultWithSpacedOrder.reply.draft, /VS-75209|VS 75209|informacoes do pedido|informações do pedido|订单信息/i);
+  assert.match(globalOrderAIResultWithSpacedOrder.reply.draft, /danificado|danificada|damage|损坏|破损/i);
+  assert.match(globalOrderAIResultWithSpacedOrder.reply.draft, /devolver|devolucao|devolução|trocar|troca|return|exchange|退货|换货/i);
 
   const highAIResult = await processEmailWithAI({
     senderEmail: 'buyer-ai-high@example.test',

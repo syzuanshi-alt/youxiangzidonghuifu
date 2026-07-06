@@ -61,7 +61,9 @@ export function renderPrompt({
         `Detected order numbers: ${(normalizedContext.detectedFields.orderNumbers || []).join(', ') || 'none'}`,
         `Detected tracking numbers: ${(normalizedContext.detectedFields.trackingNumbers || []).join(', ') || 'none'}`,
         `Detected emails in customer message: ${(normalizedContext.detectedFields.emails || []).join(', ') || 'none'}`,
+        `Detected customer facts: ${normalizedContext.customerFacts?.factsEn || 'none'}`,
         `Attachment/evidence signal: ${normalizedContext.attachmentSignals?.hasAttachment ? 'actual attachment present' : normalizedContext.attachmentSignals?.mentionedAttachment ? 'mentioned in text' : 'none'}`,
+        'Required behavior: preserve every detected customer fact in the draft when relevant, and never ask the customer to repeat an order number, email, issue description, or requested solution that is already detected above.',
       ].join('\n') : '',
       missingFields ? [
         `Missing fields: ${(missingFields.missingFields || []).join(', ') || 'none'}`,

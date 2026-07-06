@@ -5,6 +5,9 @@ import {
 import {
   extractOrderIdentifiers,
 } from '../../orderIdentifiers.js';
+import {
+  detectCustomerFacts,
+} from '../../customerFacts.js';
 
 function joinText(values = []) {
   return values
@@ -30,6 +33,14 @@ export function normalizeEmailContext(emailPayload = {}) {
   const senderEmail = String(emailPayload.senderEmail || emailPayload.sender || '').trim().toLowerCase();
   const attachments = normalizeArray(emailPayload.attachments || emailPayload.attachmentNames);
   const mentionedAttachment = /attach|attachment|photo|video|picture|image|screenshot|附件|图片|照片|视频|截图/.test(normalizedText);
+  const orderNumbers = extractOrderIdentifiers(originalText);
+  const trackingNumbers = extractTrackingNumbers(originalText);
+  const emails = originalText.match(/[a-z0-9._%+-]+@[a-z0-9.-]+\.[a-z]{2,}/gi) || [];
+  const customerFacts = detectCustomerFacts(originalText, {
+    orderNumbers,
+    trackingNumbers,
+    emails,
+  });
 
   return {
     originalText,
@@ -42,10 +53,11 @@ export function normalizeEmailContext(emailPayload = {}) {
       hasHistory: Boolean(emailPayload.history || emailPayload.threadSummary || emailPayload.previousMessages),
     },
     detectedFields: {
-      orderNumbers: extractOrderIdentifiers(originalText),
-      trackingNumbers: extractTrackingNumbers(originalText),
-      emails: originalText.match(/[a-z0-9._%+-]+@[a-z0-9.-]+\.[a-z]{2,}/gi) || [],
+      orderNumbers,
+      trackingNumbers,
+      emails,
     },
+    customerFacts,
     attachmentSignals: {
       hasAttachment: attachments.length > 0 || Boolean(emailPayload.hasAttachment),
       attachmentNames: attachments,

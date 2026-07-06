@@ -16,15 +16,22 @@ export function buildReplyContext({
   const trackingNumbers = unique(context.detectedFields?.trackingNumbers);
   const hasAttachment = context.attachmentSignals?.hasAttachment === true;
   const mentionedAttachment = context.attachmentSignals?.mentionedAttachment === true;
+  const customerFacts = context.customerFacts || {};
 
   return {
     normalizedContext: context,
+    customerFacts,
     orderNumbers,
     emails,
     trackingNumbers,
     hasOrderIdentifier: orderNumbers.length > 0 || emails.length > 0,
     hasTrackingIdentifier: trackingNumbers.length > 0,
     hasAnyIdentifier: orderNumbers.length > 0 || emails.length > 0 || trackingNumbers.length > 0,
+    hasIssueDetails: customerFacts.hasDamageIssue === true,
+    hasDesiredResolution: customerFacts.hasDesiredResolution === true,
+    hasActionableIssueFacts: customerFacts.hasActionableIssueFacts === true,
+    factsZh: customerFacts.factsZh || '',
+    factsEn: customerFacts.factsEn || '',
     hasEvidence: hasAttachment || mentionedAttachment,
     hasAttachment,
     mentionedAttachment,

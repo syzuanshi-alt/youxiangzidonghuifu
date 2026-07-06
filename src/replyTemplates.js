@@ -204,6 +204,7 @@ const REPLY_LANGUAGE_PHRASES = {
   es: {
     low: 'Hola, gracias por contactarnos. Hemos recibido su correo. Para ayudarle a revisar esto mas rapido, comparta su numero de pedido o el correo usado en el pedido si corresponde.',
     providedInfo: 'Hola, veo que ya compartio la informacion del pedido. Indique tambien el problema concreto y, si tiene capturas, fotos o videos relevantes, envielos para poder revisar todo junto.',
+    providedIssue: 'Hola, veo que ya compartio la informacion del pedido y explico que el producto o paquete llego danado. Tambien entiendo que desea devolverlo o cambiarlo. Si tiene fotos, videos, capturas o mensajes de la plataforma que muestren el problema, envielos para poder revisar todo junto.',
     medium: 'Hola, para ayudarle con precision, comparta su numero de pedido, el correo usado en el pedido y el problema concreto que necesita resolver.',
     manualHold: 'Hola, esta solicitud requiere datos concretos antes de avanzar. Envie su numero de pedido, correo de pedido, fotos o videos relevantes y la solucion que espera.',
     detailedExtra: 'Si es posible, comparta su numero de pedido, correo de pedido y cualquier captura o video relevante para que podamos revisarlo mas rapido.',
@@ -211,6 +212,7 @@ const REPLY_LANGUAGE_PHRASES = {
   fr: {
     low: 'Bonjour, merci de nous avoir contactes. Nous avons bien recu votre e-mail. Pour nous aider a verifier plus rapidement, veuillez partager votre numero de commande ou l e-mail utilise pour la commande si necessaire.',
     providedInfo: 'Bonjour, je vois que vous avez deja partage les informations de commande. Veuillez aussi preciser le probleme exact et envoyer toute capture, photo ou video utile afin que je puisse tout verifier ensemble.',
+    providedIssue: 'Bonjour, je vois que vous avez deja partage les informations de commande et indique que le produit ou le colis est arrive endommage. Je comprends aussi que vous souhaitez un retour ou un echange. Si vous avez des photos, videos, captures ou messages de plateforme montrant le probleme, envoyez-les afin que je puisse tout verifier ensemble.',
     medium: 'Bonjour, pour vous aider avec precision, veuillez partager votre numero de commande, l e-mail de commande et le probleme exact a traiter.',
     manualHold: 'Bonjour, cette demande necessite des informations concretes avant toute action. Veuillez envoyer le numero de commande, l e-mail de commande, les photos ou videos utiles et la solution souhaitee.',
     detailedExtra: 'Si possible, veuillez partager votre numero de commande, l e-mail de commande et toute capture ou video pertinente afin que nous puissions verifier plus rapidement.',
@@ -218,6 +220,7 @@ const REPLY_LANGUAGE_PHRASES = {
   de: {
     low: 'Hallo, vielen Dank fur Ihre Nachricht. Wir haben Ihre E-Mail erhalten. Damit wir dies schneller prufen konnen, senden Sie uns bitte bei Bedarf Ihre Bestellnummer oder die E-Mail-Adresse der Bestellung.',
     providedInfo: 'Hallo, ich sehe, dass Sie die Bestellinformationen bereits gesendet haben. Bitte beschreiben Sie auch das genaue Anliegen und senden Sie bei Bedarf relevante Screenshots, Fotos oder Videos, damit ich alles zusammen prufen kann.',
+    providedIssue: 'Hallo, ich sehe, dass Sie die Bestellinformationen bereits gesendet und beschrieben haben, dass das Produkt oder Paket beschadigt angekommen ist. Ich verstehe auch, dass Sie eine Ruckgabe oder einen Umtausch wunschen. Wenn Sie Fotos, Videos, Screenshots oder Plattformnachrichten zum Problem haben, senden Sie diese bitte mit, damit ich alles zusammen prufen kann.',
     medium: 'Hallo, damit wir gezielt helfen konnen, senden Sie bitte Ihre Bestellnummer, die Bestell-E-Mail und das konkrete Anliegen.',
     manualHold: 'Hallo, fur diese Anfrage benotigen wir konkrete Angaben, bevor wir sie weiter bearbeiten konnen. Bitte senden Sie Bestellnummer, Bestell-E-Mail, relevante Fotos oder Videos und die gewunschte Losung.',
     detailedExtra: 'Wenn moglich, senden Sie bitte Ihre Bestellnummer, Bestell-E-Mail und relevante Screenshots oder Videos, damit wir dies schneller prufen konnen.',
@@ -225,6 +228,7 @@ const REPLY_LANGUAGE_PHRASES = {
   pt: {
     low: 'Ola, obrigado por entrar em contato. Recebemos seu e-mail. Para ajudar a verificar mais rapido, envie o numero do pedido ou o e-mail usado no pedido, se aplicavel.',
     providedInfo: 'Ola, vi que voce ja enviou as informacoes do pedido. Por favor, explique tambem o problema especifico e envie capturas, fotos ou videos relevantes, se tiver, para que eu possa conferir tudo junto.',
+    providedIssue: 'Ola, vi que voce ja enviou as informacoes do pedido e informou que o produto ou pacote chegou danificado. Tambem entendi que deseja devolucao ou troca. Se tiver fotos, videos, capturas ou mensagens da plataforma mostrando o problema, envie para eu conferir tudo junto.',
     medium: 'Ola, para ajudar com precisao, envie o numero do pedido, o e-mail usado no pedido e o problema especifico que precisa resolver.',
     manualHold: 'Ola, esta solicitacao precisa de informacoes concretas antes de avancar. Envie o numero do pedido, e-mail do pedido, fotos ou videos relevantes e a solucao esperada.',
     detailedExtra: 'Se possivel, envie o numero do pedido, o e-mail do pedido e capturas ou videos relevantes para que possamos verificar mais rapido.',
@@ -232,6 +236,7 @@ const REPLY_LANGUAGE_PHRASES = {
   it: {
     low: 'Ciao, grazie per averci contattato. Abbiamo ricevuto la tua e-mail. Per aiutarci a verificare piu rapidamente, condividi il numero dell ordine o l e-mail usata per l ordine se necessario.',
     providedInfo: 'Ciao, vedo che hai gia condiviso le informazioni dell ordine. Indicami anche il problema specifico e, se hai screenshot, foto o video pertinenti, inviali cosi posso controllare tutto insieme.',
+    providedIssue: 'Ciao, vedo che hai gia condiviso le informazioni dell ordine e indicato che il prodotto o il pacco e arrivato danneggiato. Ho capito anche che desideri un reso o un cambio. Se hai foto, video, screenshot o messaggi della piattaforma che mostrano il problema, inviali cosi posso controllare tutto insieme.',
     medium: 'Ciao, per aiutarti con precisione, condividi il numero dell ordine, l e-mail usata per l ordine e il problema specifico da risolvere.',
     manualHold: 'Ciao, questa richiesta richiede informazioni concrete prima di procedere. Invia numero dell ordine, e-mail dell ordine, foto o video pertinenti e la soluzione che desideri.',
     detailedExtra: 'Se possibile, condividi il numero dell ordine, l e-mail dell ordine e screenshot o video pertinenti per permetterci di verificare piu rapidamente.',
@@ -239,6 +244,7 @@ const REPLY_LANGUAGE_PHRASES = {
   nl: {
     low: 'Hallo, bedankt voor uw bericht. We hebben uw e-mail ontvangen. Deel indien nodig uw bestelnummer of het e-mailadres van de bestelling zodat we dit sneller kunnen controleren.',
     providedInfo: 'Hallo, ik zie dat u de bestelgegevens al hebt gedeeld. Beschrijf ook het specifieke probleem en stuur eventuele relevante screenshots, fotos of videos mee, zodat ik alles samen kan controleren.',
+    providedIssue: 'Hallo, ik zie dat u de bestelgegevens al hebt gedeeld en hebt aangegeven dat het product of pakket beschadigd is aangekomen. Ik begrijp ook dat u het wilt retourneren of ruilen. Als u fotos, videos, screenshots of platformberichten hebt die het probleem tonen, stuur die dan mee zodat ik alles samen kan controleren.',
     medium: 'Hallo, deel uw bestelnummer, bestel-e-mail en het specifieke probleem zodat we gericht kunnen helpen.',
     manualHold: 'Hallo, voor dit verzoek hebben we concrete informatie nodig voordat we verder kunnen. Deel bestelnummer, bestel-e-mail, relevante foto of video en de gewenste oplossing.',
     detailedExtra: 'Deel indien mogelijk uw bestelnummer, bestel-e-mail en relevante screenshots of video zodat we dit sneller kunnen controleren.',
@@ -246,6 +252,7 @@ const REPLY_LANGUAGE_PHRASES = {
   tr: {
     low: 'Merhaba, bizimle iletisime gectiginiz icin tesekkurler. E-postanizi aldik. Daha hizli kontrol edebilmemiz icin gerekiyorsa siparis numaranizi veya sipariste kullanilan e-posta adresini paylasin.',
     providedInfo: 'Merhaba, siparis bilgilerini zaten paylastiginizi goruyorum. Lutfen cozulmesini istediginiz belirli sorunu da yazin; varsa ilgili ekran goruntusu, fotograf veya videolari da gonderin, birlikte kontrol edebileyim.',
+    providedIssue: 'Merhaba, siparis bilgilerini zaten paylastiginizi ve urunun ya da paketin hasarli geldigini belirttiginizi goruyorum. Iade veya degisim istediginizi de anladim. Sorunu gosteren fotograf, video, ekran goruntusu veya platform mesaji varsa gonderin; hepsini birlikte kontrol edeyim.',
     medium: 'Merhaba, dogru yardim saglayabilmemiz icin siparis numaranizi, siparis e-postanizi ve cozulmesini istediginiz belirli sorunu paylasin.',
     manualHold: 'Merhaba, bu talep ilerlemeden once somut bilgi gerektiriyor. Siparis numarasi, siparis e-postasi, ilgili fotograf veya videolar ve beklediginiz cozum bilgisini gonderin.',
     detailedExtra: 'Mumkunse siparis numaranizi, siparis e-postanizi ve ilgili ekran goruntusu veya videolari paylasin.',
@@ -253,6 +260,7 @@ const REPLY_LANGUAGE_PHRASES = {
   vi: {
     low: 'Xin chao, cam on ban da lien he. Chung toi da nhan duoc email cua ban. Neu can, vui long cung cap ma don hang hoac email dat hang de chung toi kiem tra nhanh hon.',
     providedInfo: 'Xin chao, minh thay ban da cung cap thong tin don hang. Vui long noi ro van de can ho tro va gui them anh chup man hinh, hinh anh hoac video lien quan neu co de minh kiem tra chung.',
+    providedIssue: 'Xin chao, minh thay ban da cung cap thong tin don hang va cho biet san pham hoac goi hang bi hu hong khi nhan. Minh cung hieu ban muon tra hang hoac doi hang. Neu co hinh anh, video, anh chup man hinh hoac tin nhan nen tang the hien van de, ban gui them de minh kiem tra chung.',
     medium: 'Xin chao, de ho tro chinh xac, vui long cung cap ma don hang, email dat hang va van de cu the ban can xu ly.',
     manualHold: 'Xin chao, yeu cau nay can thong tin cu the truoc khi tiep tuc. Vui long gui ma don hang, email dat hang, anh hoac video lien quan va phuong an ban mong muon.',
     detailedExtra: 'Neu co the, vui long cung cap ma don hang, email dat hang va anh chup man hinh hoac video lien quan de chung toi kiem tra nhanh hon.',
@@ -260,6 +268,7 @@ const REPLY_LANGUAGE_PHRASES = {
   id: {
     low: 'Halo, terima kasih telah menghubungi kami. Kami telah menerima email Anda. Jika diperlukan, mohon bagikan nomor pesanan atau email yang digunakan untuk pesanan agar kami dapat memeriksanya lebih cepat.',
     providedInfo: 'Halo, saya melihat Anda sudah membagikan informasi pesanan. Mohon jelaskan juga masalah spesifiknya, dan kirim tangkapan layar, foto, atau video terkait jika ada agar saya dapat memeriksanya bersama.',
+    providedIssue: 'Halo, saya melihat Anda sudah membagikan informasi pesanan dan menjelaskan bahwa produk atau paket tiba dalam kondisi rusak. Saya juga memahami Anda ingin mengembalikan atau menukar produk. Jika ada foto, video, tangkapan layar, atau pesan platform yang menunjukkan masalahnya, silakan kirim agar saya dapat memeriksanya bersama.',
     medium: 'Halo, agar kami dapat membantu dengan tepat, mohon bagikan nomor pesanan, email pesanan, dan masalah spesifik yang perlu ditangani.',
     manualHold: 'Halo, permintaan ini membutuhkan informasi konkret sebelum dapat diproses. Mohon kirim nomor pesanan, email pesanan, foto atau video terkait, dan solusi yang Anda harapkan.',
     detailedExtra: 'Jika memungkinkan, bagikan nomor pesanan, email pesanan, serta tangkapan layar atau video yang relevan.',
@@ -267,6 +276,7 @@ const REPLY_LANGUAGE_PHRASES = {
   ja: {
     low: 'こんにちは。お問い合わせありがとうございます。メールを受け取りました。確認を早めるため、必要に応じて注文番号または注文時のメールアドレスをお知らせください。',
     providedInfo: 'こんにちは。注文情報はすでに共有いただいているようです。あわせて、具体的にお困りの内容と、関連するスクリーンショットや写真・動画があればお送りください。こちらでまとめて確認します。',
+    providedIssue: 'こんにちは。注文情報はすでに共有いただいており、商品または荷物が破損して届いたこと、返品または交換をご希望であることも確認しました。問題が分かる写真、動画、スクリーンショット、またはプラットフォーム上のメッセージがあれば、あわせてお送りください。こちらでまとめて確認します。',
     medium: 'こんにちは。正確に対応するため、注文番号、注文時のメールアドレス、解決したい具体的な内容をお知らせください。',
     manualHold: 'こんにちは。このご依頼を進めるには具体的な情報が必要です。注文番号、注文時のメールアドレス、関連する写真や動画、ご希望の対応内容をお送りください。',
     detailedExtra: '可能であれば、注文番号、注文時のメールアドレス、関連するスクリーンショットや動画をお送りください。',
@@ -326,6 +336,9 @@ export function normalizeReplyLanguageCode(customerLanguage = 'en') {
 function localizedPhraseForCandidate(candidate = {}, languageCode = 'en') {
   const phrases = REPLY_LANGUAGE_PHRASES[languageCode];
   if (!phrases) return candidate.content;
+  if (candidate.replyContext?.hasActionableIssueFacts && phrases.providedIssue) {
+    return phrases.providedIssue;
+  }
   if (candidate.replyContext?.hasAnyIdentifier && phrases.providedInfo) {
     return phrases.providedInfo;
   }

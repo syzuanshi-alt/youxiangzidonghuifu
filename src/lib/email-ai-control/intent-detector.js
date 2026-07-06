@@ -2,17 +2,17 @@ const INTENT_DEFINITIONS = [
   {
     key: 'refund',
     riskFloor: 'high',
-    keywords: ['refund', 'money back', '退钱', '退款', '退费'],
+    keywords: ['refund', 'money back', 'reembolso', 'remboursement', 'ruckerstattung', 'rimborso', 'terugbetaling', 'hoan tien', 'pengembalian dana', '退钱', '退款', '退费', '返金'],
   },
   {
     key: 'return',
     riskFloor: 'high',
-    keywords: ['return item', 'return order', 'send back', 'want to return', '退货', '退回'],
+    keywords: ['return item', 'return order', 'send back', 'want to return', 'return', 'devolver', 'devolucao', 'retour', 'retourner', 'zuruckgeben', 'restituire', 'retourneren', 'iade', 'tra lai', 'tra hang', 'mengembalikan', '退货', '退回', '返品'],
   },
   {
     key: 'exchange',
     riskFloor: 'high',
-    keywords: ['exchange', 'replacement', 'replace it', '换货', '更换'],
+    keywords: ['exchange', 'replacement', 'replace it', 'replace', 'trocar', 'cambiar', 'echange', 'echanger', 'umtauschen', 'cambiare', 'ruilen', 'degistirmek', 'doi san pham', 'menukar', '换货', '更换', '交換'],
   },
   {
     key: 'chargeback',
@@ -47,7 +47,7 @@ const INTENT_DEFINITIONS = [
   {
     key: 'quality_complaint',
     riskFloor: 'high',
-    keywords: ['quality issue', 'poor quality', 'defective', 'not working', 'watch does not work', '质量', '有缺陷', '不工作', '质量糟糕'],
+    keywords: ['quality issue', 'poor quality', 'defective', 'not working', 'watch does not work', 'damaged', 'arrived damaged', 'danificado', 'danificada', 'danado', 'colis endommage', 'paquet endommage', 'beschadigt', 'danneggiato', 'hasarli', 'rusak', 'hu hong', '质量', '有缺陷', '不工作', '质量糟糕', '损坏', '破损', '壊れ'],
   },
   {
     key: 'shipment_urgency',
@@ -87,21 +87,35 @@ const RISK_WEIGHT = {
   low: 1,
 };
 
+function normalizeIntentText(text = '') {
+  return String(text || '')
+    .toLowerCase()
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/ı/g, 'i')
+    .replace(/ğ/g, 'g')
+    .replace(/ş/g, 's')
+    .replace(/ç/g, 'c')
+    .replace(/ö/g, 'o')
+    .replace(/ü/g, 'u');
+}
+
 function includesKeyword(text, keyword) {
-  return text.includes(String(keyword).toLowerCase());
+  return text.includes(normalizeIntentText(keyword));
 }
 
 export function detectCustomerIntentDetail({
   emailPayload = {},
   normalizedContext = null,
 } = {}) {
-  const text = normalizedContext?.normalizedText || [
+  const rawText = normalizedContext?.normalizedText || [
     emailPayload.subject,
     emailPayload.body,
     emailPayload.bodyText,
     emailPayload.body_text,
     emailPayload.summary,
   ].filter(Boolean).join('\n').toLowerCase();
+  const text = normalizeIntentText(rawText);
 
   const matched = INTENT_DEFINITIONS
     .map((definition) => ({
