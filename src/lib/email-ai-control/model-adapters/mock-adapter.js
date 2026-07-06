@@ -89,6 +89,7 @@ export async function callMockModel({
       sendable: true,
       action: riskLevel === 'low' ? 'auto_reply' : 'draft_only',
       risk: riskLevel,
+      replyContext,
     }, customerLanguage);
 
     return {
@@ -115,6 +116,7 @@ export async function callMockModel({
     sendable: true,
     action: riskLevel === 'low' ? 'auto_reply' : 'draft_only',
     risk: riskLevel,
+    replyContext,
   }, customerLanguage);
 
   return {

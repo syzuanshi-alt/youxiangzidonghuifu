@@ -140,6 +140,9 @@ import {
   processEmailWithAI,
 } from '../src/lib/email-ai-control/index.js';
 import {
+  normalizeEmailContext,
+} from '../src/lib/email-ai-control/email-context-normalizer.js';
+import {
   callOpenAIModel,
   testOpenAIConnection,
 } from '../src/lib/email-ai-control/model-adapters/openai-adapter.js';
@@ -471,6 +474,20 @@ assert.equal(japaneseOrderStatusWithIdentifier.customerLanguageCode, 'ja');
 assert.doesNotMatch(japaneseOrderStatusWithIdentifier.replyDraft, /注文番号.*お知らせ|注文時のメールアドレス/);
 assert.match(japaneseOrderStatusWithIdentifier.replyDraft, /すでに共有|注文情報|VS-75209/);
 
+const globalOrderNumberSamples = [
+  ['Pedido: VS 75209', 'VS-75209'],
+  ['Pedido nº VS75209 chegou danificado.', 'VS75209'],
+  ['Commande n° VS 75209 reçue abîmée.', 'VS-75209'],
+  ['Bestellnummer VS 75209 ist beschädigt angekommen.', 'VS-75209'],
+  ['Ordine n. VS75209 arrivato danneggiato.', 'VS75209'],
+  ['My order #SH TEST 1001 arrived damaged.', 'SH-TEST-1001'],
+  ['注文番号：VS 75209 です。配送状況を確認したいです。', 'VS-75209'],
+];
+globalOrderNumberSamples.forEach(([body, expected]) => {
+  const context = normalizeEmailContext({ body });
+  assert.ok(context.detectedFields.orderNumbers.includes(expected), `${body} should detect ${expected}`);
+});
+
 const translatedOrderMessage = translateCustomerMessageToChinese('Hello, I want to check my order status but I do not have the order number.');
 assert.match(translatedOrderMessage.text, /订单/);
 assert.equal(translatedOrderMessage.source, 'local_fallback');
@@ -596,6 +613,19 @@ multilingualReturnSamples.forEach(([expectedLanguage, body]) => {
   assert.match(view.translation, /损坏/);
   assert.match(view.translation, /退货|换货/);
   assert.doesNotMatch(view.translation, /客户在询问|客户提到|Customer|summary/i);
+});
+const multilingualOrderSpacingSamples = [
+  'Hola, mi pedido VS 75209 llegó dañado. Quiero devolverlo o cambiarlo.',
+  'Bonjour, commande n° VS 75209 reçue abîmée. Je souhaite un retour ou échange.',
+  'Pedido nº VS75209: chegou danificado, quero devolver ou trocar.',
+  'Hello, my order #SH TEST 1001 arrived damaged and I want an exchange.',
+];
+multilingualOrderSpacingSamples.forEach((body) => {
+  const view = buildMailContentView({ bodyText: body });
+  assert.match(view.translation, /VS-?75209|SH-TEST-1001/);
+  assert.match(view.translation, /损坏|受损|破损/);
+  assert.match(view.translation, /退货|换货|更换/);
+  assert.doesNotMatch(view.translation, /客户在询问|客户提到|意图|方向|暂未生成可靠中文全文翻译/);
 });
 const unsupportedForeignView = buildMailContentView({
   bodyText: 'Dette er en testmelding om en ukjent situasjon som ikke har en lokal oversettelsesmal.',
@@ -4820,6 +4850,17 @@ try {
   assert.ok(!mediumAIResultWithOrder.missingFields.missingFields.includes('order_number_or_email'));
   assert.doesNotMatch(mediumAIResultWithOrder.reply.draft, /share your order number|please provide your order number|请补充订单号/i);
   assert.match(mediumAIResultWithOrder.reply.draft, /VS-75209|provided|already shared|这条订单|我这边/i);
+
+  const globalOrderAIResultWithSpacedOrder = await processEmailWithAI({
+    senderEmail: 'buyer-ai-pt-order@example.test',
+    subject: 'Pedido chegou danificado',
+    body: 'Olá, meu pedido VS 75209 chegou danificado. Quero devolver ou trocar o produto.',
+    source: 'email_auto_reply_workbench',
+  }, { repository });
+  assert.equal(globalOrderAIResultWithSpacedOrder.success, true);
+  assert.ok(!globalOrderAIResultWithSpacedOrder.missingFields.missingFields.includes('order_number_or_email'));
+  assert.doesNotMatch(globalOrderAIResultWithSpacedOrder.reply.draft, /send your order number|provide your order number|numero do pedido|número do pedido|订单号|下单邮箱/i);
+  assert.match(globalOrderAIResultWithSpacedOrder.reply.draft, /VS-75209|VS 75209|informacoes do pedido|informações do pedido|订单信息/i);
 
   const highAIResult = await processEmailWithAI({
     senderEmail: 'buyer-ai-high@example.test',

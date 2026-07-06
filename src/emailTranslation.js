@@ -1,3 +1,7 @@
+import {
+  extractReferenceTokens,
+} from './orderIdentifiers.js';
+
 function normalizeText(value = '') {
   return String(value || '').trim();
 }
@@ -194,10 +198,6 @@ export function detectCustomerLanguage(text = '') {
   return languageResult('unknown', { confidence: 0.25 });
 }
 
-function extractReferenceTokens(text = '') {
-  return Array.from(new Set(String(text || '').match(/\b[A-Z]{1,}[A-Z0-9-]*\d[A-Z0-9-]*\b/g) || []));
-}
-
 function translateKnownPlaceholders(text = '') {
   return String(text || '')
     .replace(/【注文番号を記入】/g, '【填写订单号】')
@@ -234,12 +234,43 @@ function productZh(text = '') {
   return '商品';
 }
 
+function referenceZh(refs = []) {
+  return refs.length ? `订单 ${refs.join('、')}` : '订单';
+}
+
+function hasDamageSignal(text = '') {
+  const lower = normalizeLatinText(text);
+  return /(damag|danad|dañ|dano|danific|endommag|abim|abîm|beschadig|danneggi|hasar|hu hong|rusak|broken|defective|损坏|破损|受损|壊|不良)/.test(lower)
+    || /破損|壊れ|不具合/.test(text);
+}
+
+function returnExchangeZh(text = '') {
+  const lower = normalizeLatinText(text);
+  const wantsReturn = /(return|devolver|retour|retourner|zuruckgeben|restituire|retourneren|iade|tra lai|tra hang|mengembalikan|退货|返品)/.test(lower)
+    || /返品|退货/.test(text);
+  const wantsExchange = /(exchange|replace|trocar|cambiar|echange|echanger|umtauschen|cambiare|ruilen|degistirmek|doi|menukar|换货|交換)/.test(lower)
+    || /交換|换货/.test(text);
+  if (wantsReturn && wantsExchange) return '我想退货或换货。';
+  if (wantsReturn) return '我想退货。';
+  if (wantsExchange) return '我想换货。';
+  if (/refund|返金|退款/.test(lower) || /返金|退款/.test(text)) return '我想退款。';
+  return '';
+}
+
 function translateEnglishCustomerSentence(sentence = '') {
   const lower = normalizeLatinText(sentence);
   const refs = extractReferenceTokens(sentence);
   const refText = refs.length ? ` ${refs.join('、')}` : '';
   const color = colorZh(sentence);
   const product = productZh(sentence);
+  const issueParts = [];
+
+  if (refs.length && /\border\b/.test(lower) && hasDamageSignal(sentence)) {
+    issueParts.push(`我的${referenceZh(refs)} 到货时${product}或包裹已经损坏。`);
+    const resolution = returnExchangeZh(sentence);
+    if (resolution) issueParts.push(resolution);
+    return issueParts.join('\n');
+  }
 
   if (/^(hi|hello|dear team|dear support)[,!. ]*$/i.test(sentence)) return '您好。';
   if (/hope you.?re doing well/.test(lower)) return '希望您一切顺利。';
@@ -296,10 +327,30 @@ function translateCommonCommerceSentence(sentence = '') {
   const lower = normalizeLatinText(sentence);
   const refs = extractReferenceTokens(sentence);
   const refText = refs.length ? ` ${refs.join('、')}` : '';
+  const hasOrderWord = /(pedido|commande|bestellung|ordine|siparis|don hang|pesanan|order|bestelling)/.test(lower);
+  const resolution = returnExchangeZh(sentence);
 
   if (/^(ola|hola|bonjour|hallo|ciao|merhaba|xin chao|halo)[,!. ]*$/i.test(lower)) return '您好。';
   if (/e-mail de teste|email de teste|mail de teste/.test(lower) && /devolu|return|retour|ruckgabe|restitu|retourneren|iade|tra lai|mengembalikan/.test(lower)) {
     return '测试邮件：退货申请。';
+  }
+  if (refs.length && hasOrderWord && hasDamageSignal(sentence)) {
+    return [
+      `我的${referenceZh(refs)} 到货时商品或包裹已经损坏。`,
+      resolution,
+    ].filter(Boolean).join('\n');
+  }
+  if (refs.length && hasOrderWord && resolution) {
+    return [
+      `我提供的订单号是：${refs.join('、')}。`,
+      resolution,
+    ].join('\n');
+  }
+  if (hasDamageSignal(sentence) && resolution) {
+    return [
+      '商品或包裹到货时已经损坏。',
+      resolution,
+    ].join('\n');
   }
   if (refs.length
     && /(embalagem|paquete|colis|verpackung|pacco|verpakking|pakket|paket|goi hang|kemasan|package)/.test(lower)

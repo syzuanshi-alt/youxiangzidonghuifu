@@ -2,31 +2,15 @@ import {
   normalizeArray,
   senderDomain,
 } from './types.js';
+import {
+  extractOrderIdentifiers,
+} from '../../orderIdentifiers.js';
 
 function joinText(values = []) {
   return values
     .map((value) => String(value || '').trim())
     .filter(Boolean)
     .join('\n');
-}
-
-function extractOrderNumbers(text = '') {
-  const source = String(text || '');
-  const patterns = [
-    /\border\s*(?:number|no\.?|id)\s*(?:is|为|是|#|:|：|-)?\s*([a-z0-9][a-z0-9-]{4,})\b/gi,
-    /\bmy\s+order\s*(?:is|#|:|：|-)\s*([a-z0-9][a-z0-9-]{4,})\b/gi,
-    /\b订单(?:号|编号)?\s*(?:是|为|#|:|：|-)?\s*([a-z0-9][a-z0-9-]{4,})\b/gi,
-    /注文(?:番号|号)?\s*(?:は|です|#|:|：|-)?\s*([a-z0-9][a-z0-9-]{4,})/gi,
-  ];
-  return [...new Set(patterns.flatMap((pattern) => {
-    const values = [];
-    let match = pattern.exec(source);
-    while (match) {
-      values.push(String(match[1] || '').trim());
-      match = pattern.exec(source);
-    }
-    return values;
-  }))];
 }
 
 function extractTrackingNumbers(text = '') {
@@ -58,7 +42,7 @@ export function normalizeEmailContext(emailPayload = {}) {
       hasHistory: Boolean(emailPayload.history || emailPayload.threadSummary || emailPayload.previousMessages),
     },
     detectedFields: {
-      orderNumbers: extractOrderNumbers(originalText),
+      orderNumbers: extractOrderIdentifiers(originalText),
       trackingNumbers: extractTrackingNumbers(originalText),
       emails: originalText.match(/[a-z0-9._%+-]+@[a-z0-9.-]+\.[a-z]{2,}/gi) || [],
     },
