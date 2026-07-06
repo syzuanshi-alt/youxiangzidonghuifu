@@ -240,8 +240,18 @@ function referenceZh(refs = []) {
 
 function hasDamageSignal(text = '') {
   const lower = normalizeLatinText(text);
-  return /(damag|danad|dañ|dano|danific|endommag|abim|abîm|beschadig|danneggi|hasar|hu hong|rusak|broken|defective|损坏|破损|受损|壊|不良)/.test(lower)
-    || /破損|壊れ|不具合/.test(text);
+  return /(damag|danad|dañ|dano|danific|endommag|abim|abîm|beschadig|danneggi|hasar|hu hong|rusak|broken|broke|break|defective|snap|snapped|损坏|破损|受损|断|裂|壊|不良)/.test(lower)
+    || /破損|壊れ|不具合|断裂|断了|断掉|裂开|裂了/.test(text);
+}
+
+function componentZh(text = '') {
+  const lower = normalizeLatinText(text);
+  if (/(watch\s*)?(strap|band|bracelet)\b|表带|表鏈|表链|時計バンド|時計のバンド|correa|pulseira|cinturino|tali jam/.test(lower)
+    || /表带|表鏈|表链|時計バンド|時計のバンド/.test(text)) return '表带';
+  if (/\b(clasp|buckle)\b|表扣|扣子|留め具/.test(lower) || /表扣|扣子|留め具/.test(text)) return '表扣';
+  if (/\b(link|chain)\b|链节|表链|表鏈/.test(lower) || /链节|表链|表鏈/.test(text)) return '表链/链节';
+  if (/\b(glass|crystal|screen)\b|镜面|表镜|玻璃/.test(lower) || /镜面|表镜|玻璃/.test(text)) return '表镜';
+  return '';
 }
 
 function returnExchangeZh(text = '') {
@@ -264,7 +274,11 @@ function translateEnglishCustomerSentence(sentence = '') {
   const color = colorZh(sentence);
   const product = productZh(sentence);
   const issueParts = [];
+  const component = componentZh(sentence);
 
+  if (refs.length && component && hasDamageSignal(sentence)) {
+    return `我的订单 ${refs.join('、')} 的${component}断裂或损坏。`;
+  }
   if (refs.length && /\border\b/.test(lower) && hasDamageSignal(sentence)) {
     issueParts.push(`我的${referenceZh(refs)} 到货时${product}或包裹已经损坏。`);
     const resolution = returnExchangeZh(sentence);
@@ -278,7 +292,7 @@ function translateEnglishCustomerSentence(sentence = '') {
   if (/placed the purchase a few days ago/.test(lower) && /shipment|delivery/.test(lower)) {
     return '我几天前下单了，但还没有收到发货或配送更新。';
   }
-  if (/my order number is/.test(lower)) return `我的订单号是：${valueAfterColon(sentence) || '未填写'}。`;
+  if (/my order number is/.test(lower)) return `我的订单号是：${valueAfterColon(sentence) || refs.join('、') || '未填写'}。`;
   if (/purchase date/.test(lower)) return `下单日期：${valueAfterColon(sentence) || '未填写'}。`;
   if (/item purchased/.test(lower)) return `购买商品：${valueAfterColon(sentence) || '未填写'}。`;
   if (/confirm the current status of this order/.test(lower)) return '请帮我确认这个订单的当前状态。';

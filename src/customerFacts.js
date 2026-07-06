@@ -17,8 +17,31 @@ function unique(values = []) {
 
 function hasDamageIssue(text = '') {
   const lower = normalizeLatinText(text);
-  return /(damag|danad|dano|danific|endommag|abim|beschadig|danneggi|hasar|hu hong|rusak|broken|defective|damage|损坏|破损|受损|质量|有缺陷|不工作)/.test(lower)
-    || /破損|壊れ|不具合/.test(String(text || ''));
+  return /(damag|danad|dano|danific|endommag|abim|beschadig|danneggi|hasar|hu hong|rusak|broken|broke|break|defective|damage|snap|snapped|裂|断|损坏|破损|受损|质量|有缺陷|不工作)/.test(lower)
+    || /破損|壊れ|不具合|断裂|断了|断掉|裂开|裂了|坏了|表带断|表扣坏|链节断/.test(String(text || ''));
+}
+
+function detectIssueComponents(text = '') {
+  const source = String(text || '');
+  const lower = normalizeLatinText(source);
+  const components = [];
+  if (/(watch\s*)?(strap|band|bracelet)\b|表带|錶帶|表鏈|表链|時計バンド|時計のバンド|시계줄|시계 밴드|correa|pulseira|bracelet|armband|cinturino|kayis|tali jam/.test(lower)
+    || /表带|錶帶|表鏈|表链|時計バンド|時計のバンド|시계줄|시계 밴드/.test(source)) {
+    components.push('表带');
+  }
+  if (/\b(clasp|buckle|扣|表扣|錶扣|留め具|버클|fecho|hebilla|boucle|schnalle|fibbia)\b/.test(lower)
+    || /表扣|錶扣|扣子|留め具|버클/.test(source)) {
+    components.push('表扣');
+  }
+  if (/\b(link|chain|链节|鏈節|表链|表鏈|コマ|リンク)\b/.test(lower)
+    || /链节|鏈節|表链|表鏈/.test(source)) {
+    components.push('表链/链节');
+  }
+  if (/\b(glass|crystal|screen|镜面|鏡面|表镜|表鏡)\b/.test(lower)
+    || /镜面|鏡面|表镜|表鏡|玻璃/.test(source)) {
+    components.push('表镜');
+  }
+  return unique(components);
 }
 
 function hasReturnRequest(text = '') {
@@ -51,6 +74,14 @@ function resolutionLabels({
   return labels;
 }
 
+function componentEnglishLabel(component = '') {
+  if (component === '表带') return 'watch strap/band';
+  if (component === '表扣') return 'watch clasp/buckle';
+  if (component === '表链/链节') return 'watch bracelet/link';
+  if (component === '表镜') return 'watch glass/crystal';
+  return 'product part';
+}
+
 export function detectCustomerFacts(text = '', {
   orderNumbers = [],
   trackingNumbers = [],
@@ -61,6 +92,8 @@ export function detectCustomerFacts(text = '', {
   const normalizedTrackingNumbers = unique(trackingNumbers);
   const normalizedEmails = unique(emails);
   const damageIssue = hasDamageIssue(source);
+  const issueComponents = detectIssueComponents(source);
+  const componentIssue = damageIssue && issueComponents.length > 0;
   const returnRequest = hasReturnRequest(source);
   const exchangeRequest = hasExchangeRequest(source);
   const refundRequest = hasRefundRequest(source);
@@ -69,6 +102,7 @@ export function detectCustomerFacts(text = '', {
     exchangeRequest,
     refundRequest,
   });
+  const issueComponentsEn = issueComponents.map(componentEnglishLabel);
 
   const zhParts = [];
   const enParts = [];
@@ -85,8 +119,12 @@ export function detectCustomerFacts(text = '', {
     enParts.push(`customer already provided tracking number ${normalizedTrackingNumbers.join(', ')}`);
   }
   if (damageIssue) {
-    zhParts.push('客户已说明商品或包裹到货损坏/破损');
-    enParts.push('customer said the product or package arrived damaged');
+    zhParts.push(componentIssue
+      ? `客户已说明${issueComponents.join('、')}损坏/断裂`
+      : '客户已说明商品或包裹到货损坏/破损');
+    enParts.push(componentIssue
+      ? `customer said ${issueComponentsEn.join(', ')} is damaged or broken`
+      : 'customer said the product or package arrived damaged');
   }
   if (requestedResolutions.length) {
     zhParts.push(`客户诉求是${requestedResolutions.join('或')}`);
@@ -98,11 +136,14 @@ export function detectCustomerFacts(text = '', {
     trackingNumbers: normalizedTrackingNumbers,
     emails: normalizedEmails,
     hasDamageIssue: damageIssue,
+    hasComponentIssue: componentIssue,
+    issueComponents,
+    issueComponentsEn,
     hasReturnRequest: returnRequest,
     hasExchangeRequest: exchangeRequest,
     hasRefundRequest: refundRequest,
     hasDesiredResolution: requestedResolutions.length > 0,
-    hasActionableIssueFacts: damageIssue && requestedResolutions.length > 0,
+    hasActionableIssueFacts: damageIssue && (requestedResolutions.length > 0 || componentIssue),
     requestedResolutions,
     factsZh: zhParts.join('；'),
     factsEn: enParts.join('; '),

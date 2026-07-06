@@ -82,7 +82,7 @@ import {
   readJsonPayload,
 } from './httpResponse.js';
 
-const REPLY_DRAFT_SCHEMA_VERSION = 'fact-grounded-replies-v2';
+const REPLY_DRAFT_SCHEMA_VERSION = 'component-fact-grounded-replies-v3';
 const REPLY_DRAFT_SCHEMA_VERSION_KEY = 'feishu-mail-reply-draft-schema-version';
 const CANDIDATE_SELECTIONS_KEY = 'feishu-mail-candidate-selections';
 

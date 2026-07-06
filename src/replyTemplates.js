@@ -336,6 +336,10 @@ export function normalizeReplyLanguageCode(customerLanguage = 'en') {
 function localizedPhraseForCandidate(candidate = {}, languageCode = 'en') {
   const phrases = REPLY_LANGUAGE_PHRASES[languageCode];
   if (!phrases) return candidate.content;
+  if (candidate.replyContext?.hasComponentIssue) {
+    const componentIssue = localizedComponentIssuePhrase(candidate.replyContext, languageCode);
+    if (componentIssue) return componentIssue;
+  }
   if (candidate.replyContext?.hasActionableIssueFacts && phrases.providedIssue) {
     return phrases.providedIssue;
   }
@@ -354,6 +358,25 @@ function localizedPhraseForCandidate(candidate = {}, languageCode = 'en') {
     return [phrases.low, phrases.detailedExtra].join('\n');
   }
   return phrases.low;
+}
+
+function localizedComponentIssuePhrase(replyContext = {}, languageCode = 'en') {
+  const hasStrap = (replyContext.customerFacts?.issueComponents || []).includes('表带');
+  const component = hasStrap ? 'strap' : 'part';
+  const messages = {
+    en: `Hello, I can see you already shared the order information and mentioned that the ${component === 'strap' ? 'watch strap/band' : 'product part'} is broken or damaged. If you have photos, videos, screenshots, or platform messages showing this issue, feel free to send them too so I can review everything together.`,
+    es: `Hola, veo que ya compartio la informacion del pedido y explico que ${component === 'strap' ? 'la correa del reloj' : 'la pieza del producto'} esta rota o danada. Si tiene fotos, videos, capturas o mensajes de la plataforma que muestren el problema, envielos para poder revisar todo junto.`,
+    fr: `Bonjour, je vois que vous avez deja partage les informations de commande et indique que ${component === 'strap' ? 'le bracelet de la montre' : 'la piece du produit'} est casse ou endommage. Si vous avez des photos, videos, captures ou messages de plateforme montrant le probleme, envoyez-les afin que je puisse tout verifier ensemble.`,
+    de: `Hallo, ich sehe, dass Sie die Bestellinformationen bereits gesendet und beschrieben haben, dass ${component === 'strap' ? 'das Uhrenarmband' : 'das Produktteil'} gebrochen oder beschadigt ist. Wenn Sie Fotos, Videos, Screenshots oder Plattformnachrichten zum Problem haben, senden Sie diese bitte mit, damit ich alles zusammen prufen kann.`,
+    pt: `Ola, vi que voce ja enviou as informacoes do pedido e informou que ${component === 'strap' ? 'a pulseira do relogio' : 'a peca do produto'} quebrou ou esta danificada. Se tiver fotos, videos, capturas ou mensagens da plataforma mostrando o problema, envie para eu conferir tudo junto.`,
+    it: `Ciao, vedo che hai gia condiviso le informazioni dell ordine e indicato che ${component === 'strap' ? 'il cinturino dell orologio' : 'la parte del prodotto'} e rotto o danneggiato. Se hai foto, video, screenshot o messaggi della piattaforma che mostrano il problema, inviali cosi posso controllare tutto insieme.`,
+    nl: `Hallo, ik zie dat u de bestelgegevens al hebt gedeeld en hebt aangegeven dat ${component === 'strap' ? 'het horlogebandje' : 'het productonderdeel'} kapot of beschadigd is. Als u fotos, videos, screenshots of platformberichten hebt die het probleem tonen, stuur die dan mee zodat ik alles samen kan controleren.`,
+    tr: `Merhaba, siparis bilgilerini zaten paylastiginizi ve ${component === 'strap' ? 'saat kayisinin' : 'urun parcasinin'} kirik veya hasarli oldugunu belirttiginizi goruyorum. Sorunu gosteren fotograf, video, ekran goruntusu veya platform mesaji varsa gonderin; hepsini birlikte kontrol edeyim.`,
+    vi: `Xin chao, minh thay ban da cung cap thong tin don hang va cho biet ${component === 'strap' ? 'day dong ho' : 'bo phan san pham'} bi dut, vo hoac hu hong. Neu co hinh anh, video, anh chup man hinh hoac tin nhan nen tang the hien van de, ban gui them de minh kiem tra chung.`,
+    id: `Halo, saya melihat Anda sudah membagikan informasi pesanan dan menjelaskan bahwa ${component === 'strap' ? 'tali jam' : 'bagian produk'} patah atau rusak. Jika ada foto, video, tangkapan layar, atau pesan platform yang menunjukkan masalahnya, silakan kirim agar saya dapat memeriksanya bersama.`,
+    ja: `こんにちは。注文情報はすでに共有いただいており、${component === 'strap' ? '時計バンド' : '商品の部品'}が破損していることも確認しました。問題が分かる写真、動画、スクリーンショット、またはプラットフォーム上のメッセージがあれば、あわせてお送りください。こちらでまとめて確認します。`,
+  };
+  return messages[languageCode] || messages.en;
 }
 
 export function alignReplyCandidateLanguage(candidate = {}, customerLanguage = 'en') {

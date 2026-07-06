@@ -496,6 +496,21 @@ assert.equal(portugueseDamagedReturnContext.customerFacts.hasExchangeRequest, tr
 assert.match(portugueseDamagedReturnContext.customerFacts.factsZh, /VS-75209/);
 assert.match(portugueseDamagedReturnContext.customerFacts.factsZh, /损坏|破损/);
 assert.match(portugueseDamagedReturnContext.customerFacts.factsZh, /退货|换货/);
+const watchStrapBrokenContext = normalizeEmailContext({
+  body: '我的表带断了，订单号 VS-99001，麻烦帮我处理一下。',
+});
+assert.equal(watchStrapBrokenContext.customerFacts.hasDamageIssue, true);
+assert.equal(watchStrapBrokenContext.customerFacts.hasComponentIssue, true);
+assert.ok(watchStrapBrokenContext.customerFacts.issueComponents.includes('表带'));
+assert.ok(watchStrapBrokenContext.customerFacts.issueComponentsEn.includes('watch strap/band'));
+assert.match(watchStrapBrokenContext.customerFacts.factsZh, /表带.*断裂|表带.*损坏/);
+const englishWatchStrapBrokenContext = normalizeEmailContext({
+  body: 'My order number is VS-99002 and the watch strap broke after delivery.',
+});
+assert.equal(englishWatchStrapBrokenContext.customerFacts.hasDamageIssue, true);
+assert.equal(englishWatchStrapBrokenContext.customerFacts.hasComponentIssue, true);
+assert.ok(englishWatchStrapBrokenContext.customerFacts.issueComponents.includes('表带'));
+assert.match(englishWatchStrapBrokenContext.customerFacts.factsEn, /watch strap\/band.*broken|watch strap\/band.*damaged/);
 
 const translatedOrderMessage = translateCustomerMessageToChinese('Hello, I want to check my order status but I do not have the order number.');
 assert.match(translatedOrderMessage.text, /订单/);
@@ -515,6 +530,12 @@ assert.match(translatedEnglishWrongColor.text, /手表/);
 assert.match(translatedEnglishWrongColor.text, /黑色/);
 assert.match(translatedEnglishWrongColor.text, /换/);
 assert.doesNotMatch(translatedEnglishWrongColor.text, /客户在询问|客户提到|意图|方向/);
+const translatedEnglishStrapBroken = translateCustomerMessageToChinese('My order number is VS-99002 and the watch strap broke after delivery.');
+assert.equal(translatedEnglishStrapBroken.language.code, 'en');
+assert.match(translatedEnglishStrapBroken.text, /VS-99002/);
+assert.match(translatedEnglishStrapBroken.text, /表带/);
+assert.match(translatedEnglishStrapBroken.text, /断裂|损坏|断了/);
+assert.doesNotMatch(translatedEnglishStrapBroken.text, /客户在询问|客户提到|意图|方向/);
 const japaneseWrongColorBody = 'こんにちは。注文した時計と違う色の商品が届きました。黒に交換できますか。';
 const translatedJapaneseWrongColor = translateCustomerMessageToChinese(japaneseWrongColorBody);
 assert.equal(translatedJapaneseWrongColor.language.code, 'ja');
@@ -4873,6 +4894,34 @@ try {
   assert.match(globalOrderAIResultWithSpacedOrder.reply.draft, /VS-75209|VS 75209|informacoes do pedido|informações do pedido|订单信息/i);
   assert.match(globalOrderAIResultWithSpacedOrder.reply.draft, /danificado|danificada|damage|损坏|破损/i);
   assert.match(globalOrderAIResultWithSpacedOrder.reply.draft, /devolver|devolucao|devolução|trocar|troca|return|exchange|退货|换货/i);
+
+  const strapBrokenAIResult = await processEmailWithAI({
+    senderEmail: 'buyer-ai-strap@example.test',
+    subject: '售后',
+    body: '我的表带断了，订单号 VS-99001，麻烦帮我处理一下。',
+    source: 'email_auto_reply_workbench',
+  }, { repository });
+  assert.equal(strapBrokenAIResult.success, true);
+  assert.equal(strapBrokenAIResult.intent.primaryIntent, 'quality_complaint');
+  assert.ok(!strapBrokenAIResult.missingFields.missingFields.includes('order_number_or_email'));
+  assert.doesNotMatch(strapBrokenAIResult.reply.draft, /具体说一下|具体说明|specific issue|请.*订单号|麻烦.*订单号|补充.*订单号|请.*下单邮箱|麻烦.*下单邮箱|补充.*下单邮箱/i);
+  assert.match(strapBrokenAIResult.reply.draft, /VS-99001/);
+  assert.match(strapBrokenAIResult.reply.draft, /表带/);
+  assert.match(strapBrokenAIResult.reply.draft, /断|断裂|损坏|broken/i);
+
+  const englishStrapBrokenAIResult = await processEmailWithAI({
+    senderEmail: 'buyer-ai-en-strap@example.test',
+    subject: 'After-sales issue',
+    body: 'My order number is VS-99002 and the watch strap broke after delivery.',
+    source: 'email_auto_reply_workbench',
+  }, { repository });
+  assert.equal(englishStrapBrokenAIResult.success, true);
+  assert.equal(englishStrapBrokenAIResult.intent.primaryIntent, 'quality_complaint');
+  assert.ok(!englishStrapBrokenAIResult.missingFields.missingFields.includes('order_number_or_email'));
+  assert.doesNotMatch(englishStrapBrokenAIResult.reply.draft, /specific issue|send your order number|provide your order number/i);
+  assert.match(englishStrapBrokenAIResult.reply.draft, /VS-99002/);
+  assert.match(englishStrapBrokenAIResult.reply.draft, /strap|band/i);
+  assert.match(englishStrapBrokenAIResult.reply.draft, /broke|broken|damaged/i);
 
   const highAIResult = await processEmailWithAI({
     senderEmail: 'buyer-ai-high@example.test',

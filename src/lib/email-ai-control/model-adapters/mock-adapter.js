@@ -9,7 +9,15 @@ function factAwareContent(replyContext = {}, {
   riskLevel = 'medium',
 } = {}) {
   const shared = customerSharedInfoSummary(replyContext);
+  const issueComponentsZh = replyContext.customerFacts?.issueComponents?.join('、') || '';
+  const issueComponentsEn = replyContext.customerFacts?.issueComponentsEn?.join(', ') || 'the product part';
   const hasFacts = replyContext.hasActionableIssueFacts;
+  if (replyContext.hasIssueDetails && replyContext.hasAnyIdentifier) {
+    return {
+      content: `Hello, I can see you already shared ${shared.en || 'the order information'} and mentioned that ${issueComponentsEn} is damaged or broken. If you have photos, videos, screenshots, or platform messages showing this issue, feel free to send them too so I can review everything together.`,
+      contentZh: `您好，我看到您已经提供了${shared.zh || '订单信息'}，也说明${issueComponentsZh || '商品或包裹'}损坏/断裂。如果有能展示这个问题的照片、视频、截图或平台消息，也可以一起发我，我这边方便完整核对。`,
+    };
+  }
   if (hasFacts) {
     return {
       content: `Hello, I can see you already shared ${shared.en || 'the order information'} and mentioned that the product or package arrived damaged. I also understand you would like to return or exchange it. If you have photos, videos, screenshots, or platform messages showing the issue, feel free to send them too so I can review everything together.`,

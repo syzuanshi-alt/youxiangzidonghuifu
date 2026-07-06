@@ -787,8 +787,13 @@ try {
   assert.equal(storedSmsCodes, null);
   assert.equal(rememberedPhone, 'ops.team@example.com');
   assert.equal(await page.evaluate(() => localStorage.getItem('feishu-mail-candidate-selections')), null);
-  assert.equal(await page.evaluate(() => localStorage.getItem('feishu-mail-reply-draft-schema-version')), 'fact-grounded-replies-v2');
-  assert.deepEqual(await page.evaluate(() => JSON.parse(localStorage.getItem('feishu-mail-risk-snapshots') || '{}')), {});
+  assert.equal(await page.evaluate(() => localStorage.getItem('feishu-mail-reply-draft-schema-version')), 'component-fact-grounded-replies-v3');
+  const refreshedRiskSnapshots = await page.evaluate(() => JSON.parse(localStorage.getItem('feishu-mail-risk-snapshots') || '{}'));
+  assert.notEqual(JSON.stringify(refreshedRiskSnapshots).includes('OLD-SNAPSHOT'), true);
+  assert.notEqual(JSON.stringify(refreshedRiskSnapshots).includes('旧风险快照回复'), true);
+  Object.values(refreshedRiskSnapshots).forEach((snapshot) => {
+    assert.equal(snapshot.replyDraftSchemaVersion, 'component-fact-grounded-replies-v3');
+  });
   const blueTheme = await page.evaluate(() => {
     const rootStyle = getComputedStyle(document.documentElement);
     const bodyStyle = getComputedStyle(document.body);

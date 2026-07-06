@@ -47,7 +47,7 @@ const INTENT_DEFINITIONS = [
   {
     key: 'quality_complaint',
     riskFloor: 'high',
-    keywords: ['quality issue', 'poor quality', 'defective', 'not working', 'watch does not work', 'damaged', 'arrived damaged', 'danificado', 'danificada', 'danado', 'colis endommage', 'paquet endommage', 'beschadigt', 'danneggiato', 'hasarli', 'rusak', 'hu hong', '质量', '有缺陷', '不工作', '质量糟糕', '损坏', '破损', '壊れ'],
+    keywords: ['quality issue', 'poor quality', 'defective', 'not working', 'watch does not work', 'damaged', 'arrived damaged', 'broken', 'broke', 'strap broke', 'watch strap', 'watch band', 'clasp broke', 'danificado', 'danificada', 'danado', 'colis endommage', 'paquet endommage', 'beschadigt', 'danneggiato', 'hasarli', 'rusak', 'hu hong', '质量', '有缺陷', '不工作', '质量糟糕', '损坏', '破损', '断了', '断裂', '表带', '表扣', '表链', '壊れ'],
   },
   {
     key: 'shipment_urgency',
