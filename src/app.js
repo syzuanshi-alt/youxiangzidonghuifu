@@ -82,6 +82,10 @@ import {
   readJsonPayload,
 } from './httpResponse.js';
 
+const REPLY_DRAFT_SCHEMA_VERSION = 'single-recommended-v1';
+const REPLY_DRAFT_SCHEMA_VERSION_KEY = 'feishu-mail-reply-draft-schema-version';
+const CANDIDATE_SELECTIONS_KEY = 'feishu-mail-candidate-selections';
+
 const actionText = {
   auto_reply: '可以自动回复',
   draft_only: '只能生成草稿',
@@ -517,14 +521,20 @@ function saveReviews() {
 
 function loadCandidateSelections() {
   try {
-    return JSON.parse(localStorage.getItem('feishu-mail-candidate-selections') || '{}');
+    if (localStorage.getItem(REPLY_DRAFT_SCHEMA_VERSION_KEY) !== REPLY_DRAFT_SCHEMA_VERSION) {
+      localStorage.removeItem(CANDIDATE_SELECTIONS_KEY);
+      localStorage.setItem(REPLY_DRAFT_SCHEMA_VERSION_KEY, REPLY_DRAFT_SCHEMA_VERSION);
+      return {};
+    }
+    return JSON.parse(localStorage.getItem(CANDIDATE_SELECTIONS_KEY) || '{}');
   } catch {
     return {};
   }
 }
 
 function saveCandidateSelections() {
-  localStorage.setItem('feishu-mail-candidate-selections', JSON.stringify(candidateSelections));
+  localStorage.setItem(REPLY_DRAFT_SCHEMA_VERSION_KEY, REPLY_DRAFT_SCHEMA_VERSION);
+  localStorage.setItem(CANDIDATE_SELECTIONS_KEY, JSON.stringify(candidateSelections));
 }
 
 function loadAgentConfig() {

@@ -742,7 +742,13 @@ try {
     localStorage.removeItem('feishu-mail-risk-overrides');
     localStorage.removeItem('feishu-mail-manual-archive-selections');
     localStorage.removeItem('feishu-mail-write-action-results');
-    localStorage.removeItem('feishu-mail-candidate-selections');
+    localStorage.setItem('feishu-mail-candidate-selections', JSON.stringify({
+      'MAIL-MEDIUM': {
+        candidateId: 'OLD-STANDARD',
+        content: '旧三版候选回复缓存',
+      },
+    }));
+    localStorage.setItem('feishu-mail-reply-draft-schema-version', 'three-variant-candidates');
     localStorage.removeItem('feishu-mail-rule-reviews');
   });
 
@@ -772,6 +778,8 @@ try {
   assert.equal(storedAccounts, null);
   assert.equal(storedSmsCodes, null);
   assert.equal(rememberedPhone, 'ops.team@example.com');
+  assert.equal(await page.evaluate(() => localStorage.getItem('feishu-mail-candidate-selections')), null);
+  assert.equal(await page.evaluate(() => localStorage.getItem('feishu-mail-reply-draft-schema-version')), 'single-recommended-v1');
   const blueTheme = await page.evaluate(() => {
     const rootStyle = getComputedStyle(document.documentElement);
     const bodyStyle = getComputedStyle(document.body);
