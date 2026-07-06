@@ -208,7 +208,8 @@ function makeResult(mail, rule, action, risk, requiresReview, options = {}) {
     emailPayload: mail,
     normalizedContext,
   });
-  const standardCandidate = replyCandidates.find((candidate) => candidate.variant === 'standard');
+  const recommendedCandidate = replyCandidates.find((candidate) => candidate.variant === 'recommended')
+    || replyCandidates[0];
 
   return {
     ...mail,
@@ -218,7 +219,7 @@ function makeResult(mail, rule, action, risk, requiresReview, options = {}) {
     lane: LANE_BY_RISK[risk],
     requiresReview: template ? template.requiresReview : requiresReview,
     allowsRealSend: false,
-    replyDraft: template ? (standardCandidate?.content || template.content) : '',
+    replyDraft: recommendedCandidate?.content || (template ? template.content : ''),
     replyCandidates,
     customerLanguage,
     customerLanguageCode: customerLanguage.code,

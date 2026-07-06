@@ -35,6 +35,21 @@ export async function callMockModel({
   const sharedInfo = customerSharedInfoSummary(replyContext);
 
   if (riskLevel === 'high') {
+    const highRiskDraft = alignReplyCandidateLanguage({
+      candidateId: 'MOCK-HIGH-RISK-RECOMMENDED',
+      variant: 'recommended',
+      content: replyContext.hasAnyIdentifier
+        ? `Hello, I’m sorry this has caused concern. I can see you already shared ${sharedInfo.en || 'the order information'}. I’ll use that to review the case first; if you have photos, videos, screenshots, or platform messages that show the issue, feel free to send them too so I can check everything together.`
+        : 'Hello, I’m sorry this has caused concern. To help me check this accurately, could you please send your order number or order email, along with any photos, videos, screenshots, or platform messages that show the issue? I’ll review the details based on the information you provide.',
+      contentZh: replyContext.hasAnyIdentifier
+        ? `您好，很抱歉这件事给您带来困扰。我看到您已经提供了${sharedInfo.zh || '订单信息'}。我这边会先按这些信息核对；如果有能展示问题的照片、视频、截图或平台消息，也可以一起发我，方便完整对照。`
+        : '您好，很抱歉这件事给您带来困扰。为了准确核对，麻烦您发一下订单号或下单邮箱，以及能展示问题的照片、视频、截图或平台消息。我会根据您提供的信息继续确认。',
+      language: 'en',
+      sendable: true,
+      action: 'blocked',
+      risk: 'high',
+      replyContext,
+    }, customerLanguage);
     const knowledgeSuggestion = topKnowledge
       ? [
         `命中知识库：${topKnowledge.title || topKnowledge.id}`,
@@ -44,10 +59,10 @@ export async function callMockModel({
       ].filter(Boolean)
       : [];
     return {
-      draft: '',
+      draft: highRiskDraft.content,
       internalSuggestion: [
-        '该邮件已识别为高风险，请人工核对客户诉求、订单信息和平台规则后再回复。',
-        '回复时不要承诺退款、赔偿、补发、发货时间、法律责任或平台处理结果。',
+        '该邮件已识别为高风险，推荐回复仅作为人工审核草稿。',
+        '发送前必须核对客户诉求、订单信息、证据材料和平台规则；不要承诺退款、赔偿、补发、发货时间、法律责任或平台处理结果。',
         ...knowledgeSuggestion,
       ].join('\n'),
       translationZh: translation,

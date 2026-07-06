@@ -763,14 +763,13 @@ assert.equal(draftOnly.templateId, 'TPL-ORDER-STATUS-001');
 assert.equal(draftOnly.templateSource, 'replyTemplates');
 assert.match(draftOnly.reason, /核对订单/);
 assert.equal(draftOnly.lane, 'orange');
-assert.equal(draftOnly.replyCandidates.length, 3);
-assert.deepEqual(
-  draftOnly.replyCandidates.map((candidate) => candidate.variant),
-  ['conservative', 'standard', 'detailed'],
-);
+assert.equal(draftOnly.replyCandidates.length, 1);
+assert.equal(draftOnly.replyCandidates[0].label, '推荐回复');
+assert.equal(draftOnly.replyCandidates[0].variant, 'recommended');
 assert.ok(draftOnly.replyCandidates.every((candidate) => candidate.editable));
 assert.ok(draftOnly.replyCandidates.every((candidate) => candidate.requiresReview));
 assert.ok(draftOnly.replyCandidates.every((candidate) => candidate.allowsRealSend === false));
+assert.match(draftOnly.replyDraft, /我看到|我这边|先按|核对/);
 
 assert.deepEqual(RISK_OVERRIDE_OPTIONS.map((option) => option.risk), ['high', 'medium', 'low', 'spam']);
 const manuallyLowRisk = applyRiskOverrideToMail(draftOnly, {
@@ -801,12 +800,15 @@ assert.equal(blocked.requiresReview, true);
 assert.equal(blocked.allowsRealSend, false);
 assert.equal(blocked.templateId, null);
 assert.equal(blocked.templateSource, 'blocked');
-assert.equal(blocked.replyDraft, '');
+assert.match(blocked.replyDraft, /很抱歉|我看到|核对|订单/);
 assert.match(blocked.reason, /高风险/);
 assert.equal(blocked.lane, 'red');
-assert.ok(blocked.replyCandidates.length >= 1);
+assert.equal(blocked.replyCandidates.length, 1);
+assert.equal(blocked.replyCandidates[0].label, '推荐回复');
+assert.equal(blocked.replyCandidates[0].variant, 'recommended');
 assert.ok(blocked.replyCandidates.every((candidate) => candidate.editable));
-assert.ok(blocked.replyCandidates.every((candidate) => candidate.sendable === false));
+assert.ok(blocked.replyCandidates.every((candidate) => candidate.sendable === true));
+assert.ok(blocked.replyCandidates.every((candidate) => candidate.requiresReview === true));
 assert.ok(blocked.replyCandidates.every((candidate) => candidate.allowsRealSend === false));
 
 const spam = classifyMail({
@@ -972,7 +974,7 @@ assert.equal(
     action: 'draft_only',
     risk: 'medium',
   }).length,
-  3,
+  1,
 );
 
 const summary = summarizeMails([lowRisk, draftOnly, blocked, ambiguous, spam]);
@@ -1015,7 +1017,13 @@ assert.ok(classifiedSamples
   .every((mail) => mail.templateSource === 'replyTemplates' && mail.templateId));
 assert.ok(classifiedSamples
   .filter((mail) => mail.action === 'blocked')
-  .every((mail) => mail.templateSource === 'blocked' && mail.templateId === null && mail.replyDraft === ''));
+  .every((mail) => (
+    mail.templateSource === 'blocked'
+    && mail.templateId === null
+    && mail.replyDraft
+    && mail.replyCandidates.length === 1
+    && mail.replyCandidates[0].variant === 'recommended'
+  )));
 assert.ok(classifiedSamples
   .filter((mail) => mail.action === 'ignore')
   .every((mail) => mail.templateSource === 'spam' && mail.templateId === null && mail.replyDraft === ''));
@@ -1762,7 +1770,7 @@ const closedLoopBatch = buildClosedLoopBatch({
     [loopBlocked.id]: { decision: 'reasonable', note: '审批通过，仅做邮件层回复。' },
   },
   selectedReplies: {
-    [loopBlocked.id]: { content: blocked.replyCandidates[1].content },
+    [loopBlocked.id]: { content: blocked.replyCandidates[0].content },
   },
 });
 assert.deepEqual(summarizeClosedLoopItems(closedLoopBatch.items), {
@@ -1778,7 +1786,7 @@ assert.equal(closedLoopBatch.items.find((item) => item.mailId === loopLowRisk.id
 assert.equal(closedLoopBatch.items.find((item) => item.mailId === loopSpam.id).operation, 'auto_archive');
 assert.equal(closedLoopBatch.items.find((item) => item.mailId === loopDraftOnly.id).operation, 'pending_review');
 assert.equal(closedLoopBatch.items.find((item) => item.mailId === loopBlocked.id).operation, 'manual_send_after_approval');
-assert.equal(closedLoopBatch.items.find((item) => item.mailId === loopBlocked.id).content, blocked.replyCandidates[1].content);
+assert.equal(closedLoopBatch.items.find((item) => item.mailId === loopBlocked.id).content, blocked.replyCandidates[0].content);
 
 const closedLoopDuplicateBatch = buildClosedLoopBatch({
   mails: [{
@@ -1845,7 +1853,7 @@ const runtimeApprovedSendClosedBatch = buildClosedLoopBatch({
     [loopBlocked.id]: { decision: 'reasonable' },
   },
   selectedReplies: {
-    [loopBlocked.id]: { content: blocked.replyCandidates[1].content },
+    [loopBlocked.id]: { content: blocked.replyCandidates[0].content },
   },
 });
 assert.equal(runtimeApprovedSendClosedBatch.items[0].operation, 'approved_send_disabled');
@@ -1891,7 +1899,7 @@ const runtimeHighRiskApprovedSendClosedBatch = buildClosedLoopBatch({
     [loopBlocked.id]: { decision: 'reasonable' },
   },
   selectedReplies: {
-    [loopBlocked.id]: { content: blocked.replyCandidates[1].content },
+    [loopBlocked.id]: { content: blocked.replyCandidates[0].content },
   },
 });
 assert.equal(runtimeHighRiskApprovedSendClosedBatch.items[0].operation, 'approved_send_disabled');
@@ -1917,7 +1925,7 @@ const runtimeHighRiskGuardedApprovalBatch = buildClosedLoopBatch({
     [loopBlocked.id]: { decision: 'reasonable' },
   },
   selectedReplies: {
-    [loopBlocked.id]: { content: blocked.replyCandidates[1].content },
+    [loopBlocked.id]: { content: blocked.replyCandidates[0].content },
   },
 });
 assert.equal(runtimeHighRiskGuardedApprovalBatch.items[0].operation, 'manual_send_after_approval');
@@ -3782,7 +3790,7 @@ await withTestServer(createFeishuApiServer({
         [loopBlocked.id]: { decision: 'reasonable', note: '审批通过，仅邮件层回复。' },
       },
       selectedReplies: {
-        [loopBlocked.id]: { content: loopBlocked.replyCandidates[1].content },
+        [loopBlocked.id]: { content: loopBlocked.replyCandidates[0].content },
       },
       actor: 'operator@example.test',
     }),
@@ -4627,7 +4635,12 @@ try {
 	  assert.equal(defaultEmailAIStore.agentPipeline.traceEnabled, true);
 	  assert.ok(defaultEmailAIStore.riskRules.some((rule) => rule.id === 'risk-high-faq-aftersale-watch'));
 	  assert.ok(defaultEmailAIStore.knowledgeBase.some((entry) => entry.id === 'kb-faq-taxes-customs-shipping-fee' && entry.standardReplyEn));
-	  assert.ok(defaultEmailAIStore.promptTemplates.find((template) => template.id === 'prompt-reply-generation').systemPrompt.includes('primary reference standard'));
+	  const replyGenerationPrompt = defaultEmailAIStore.promptTemplates.find((template) => template.id === 'prompt-reply-generation');
+	  assert.ok(replyGenerationPrompt.systemPrompt.includes('primary reference standard'));
+	  assert.ok(replyGenerationPrompt.systemPrompt.includes('recommended reply'));
+	  assert.ok(replyGenerationPrompt.taskPrompt.includes('single recommended reply'));
+	  assert.ok(replyGenerationPrompt.taskPrompt.includes('human customer service tone'));
+	  assert.ok(defaultEmailAIStore.agentSkills.find((skill) => skill.key === 'polish_reply_tone').notes.includes('空话'));
 	  const faqPrompt = renderPrompt({
 	    config: defaultEmailAIStore,
 	    promptType: 'reply_generation',
@@ -4817,10 +4830,23 @@ try {
 	  assert.equal(highAIResult.risk.level, 'high');
 	  assert.equal(highAIResult.safety.needHumanReview, true);
 	  assert.ok(['human_review', 'blocked'].includes(highAIResult.finalAction));
-	  assert.equal(highAIResult.intent.primaryIntent, 'refund');
-	  assert.equal(highAIResult.emotion.emotionLevel, 'threatening');
-	  assert.equal(highAIResult.commitmentRisk.blocked, false);
-	  assert.ok(highAIResult.decisionReasons.some((reason) => /高风险|human/i.test(reason)));
+  assert.equal(highAIResult.intent.primaryIntent, 'refund');
+  assert.equal(highAIResult.emotion.emotionLevel, 'threatening');
+  assert.equal(highAIResult.commitmentRisk.blocked, false);
+  assert.ok(highAIResult.decisionReasons.some((reason) => /高风险|human/i.test(reason)));
+  assert.match(highAIResult.reply.draft, /sorry|order|photo|video|details|review/i);
+  const mappedHighAIResult = mapEmailAIResultToWorkbenchMail({
+    id: 'MAIL-AI-HIGH',
+    sender: 'buyer-ai-high@example.test',
+    subject: 'Refund complaint',
+  }, highAIResult);
+  assert.equal(mappedHighAIResult.replyCandidates.length, 1);
+  assert.equal(mappedHighAIResult.replyCandidates[0].label, '推荐回复');
+  assert.equal(mappedHighAIResult.replyCandidates[0].variant, 'recommended');
+  assert.equal(mappedHighAIResult.replyCandidates[0].sendable, true);
+  assert.equal(mappedHighAIResult.replyCandidates[0].requiresReview, true);
+  assert.equal(mappedHighAIResult.allowsRealSend, false);
+  assert.match(mappedHighAIResult.replyDraft, /sorry|order|photo|video|details|review/i);
 
 	  const qualityFAQAIResult = await processEmailWithAI({
 	    senderEmail: 'buyer-ai-quality@example.test',
@@ -4830,7 +4856,7 @@ try {
 	  }, { repository });
 	  assert.equal(qualityFAQAIResult.risk.level, 'high');
 	  assert.ok(qualityFAQAIResult.knowledgeBaseRefs.some((ref) => ref.id === 'kb-faq-quality-complaint'));
-	  assert.equal(qualityFAQAIResult.reply.draft, '');
+	  assert.match(qualityFAQAIResult.reply.draft, /sorry|order|photo|video|issue|review/i);
 	  assert.match(qualityFAQAIResult.reply.internalSuggestion, /命中知识库：售后：质量不满/);
 
   const spamAIResult = await processEmailWithAI({

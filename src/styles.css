@@ -1131,6 +1131,33 @@ textarea {
   gap: 12px;
 }
 
+.reply-candidate-summary {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  align-items: center;
+  min-height: 42px;
+  padding: 10px 12px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: rgba(20, 120, 255, 0.08);
+}
+
+.reply-candidate-summary strong,
+.reply-candidate-summary span {
+  overflow-wrap: anywhere;
+}
+
+.reply-candidate-summary strong {
+  color: var(--ink);
+}
+
+.reply-candidate-summary span {
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 700;
+}
+
 .candidate-card {
   display: grid;
   gap: 10px;
@@ -6517,6 +6544,7 @@ body::before {
 .ai-control-embedded .table-wrap,
 .connection-section,
 .admin-gate-card,
+.reply-candidate-summary,
 .reply-candidate-preview,
 .manual-archive-card,
 .risk-override-card {
@@ -7242,6 +7270,7 @@ body::before {
 .reply-reference,
 .empty-candidates,
 .candidate-card,
+.reply-candidate-summary,
 .composer-status-grid div,
 .manual-archive-card,
 .risk-override-card,

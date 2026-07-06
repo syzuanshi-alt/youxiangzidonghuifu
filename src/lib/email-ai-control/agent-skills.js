@@ -96,6 +96,36 @@ function strongestRisk(baseRisk = {}, intent = {}, emotion = {}) {
   };
 }
 
+function polishHumanReplyTone(draft = '') {
+  let text = String(draft || '')
+    .replace(/\r\n/g, '\n')
+    .replace(/[ \t]+/g, ' ')
+    .replace(/\n{3,}/g, '\n\n')
+    .trim();
+  const before = text;
+
+  [
+    /(?:^|\n)\s*(?:您好|你好|Hello|Hi)[,，。\s]*(?:我们已收到您的邮件|我们已经收到您的邮件|we have received your email|we received your email)[。.!！\s]*/i,
+    /(?:为避免信息不准确|为了避免信息不准确)[，,]?\s*(?:客服会|我们会)?人工核对后(?:回复您|再回复)[。.!！\s]*/g,
+    /(?:customer service|our support team)\s+(?:will|will manually)\s+(?:check|review).{0,80}?(?:reply|respond).{0,20}[.!]\s*/gi,
+    /(?:请耐心等待|please wait patiently)[。.!！\s]*/gi,
+  ].forEach((pattern) => {
+    text = text.replace(pattern, '');
+  });
+
+  text = text
+    .replace(/^\s*(?:Hello|Hi)\s*,?\s*$/gim, '')
+    .replace(/^\s*(?:您好|你好)\s*[，,。]?\s*$/gm, '')
+    .replace(/\n{3,}/g, '\n\n')
+    .replace(/[ \t]+/g, ' ')
+    .trim();
+
+  return {
+    draft: text || before,
+    changed: text !== before && Boolean(text),
+  };
+}
+
 export function createEmailAgentSkills({
   spamRuleEvaluator = evaluateSpamRules,
   riskRuleEvaluator = evaluateRiskRules,
@@ -260,19 +290,19 @@ export function createEmailAgentSkills({
     },
 
     polish_reply_tone: async (context = {}) => {
-      const draft = String(context.reply?.draft || '').replace(/\s+/g, ' ').trim();
+      const polished = polishHumanReplyTone(context.reply?.draft || '');
       const reply = context.reply
         ? {
           ...context.reply,
-          draft,
-          polishedDraft: draft,
+          draft: polished.draft,
+          polishedDraft: polished.draft,
         }
         : context.reply;
       return {
         contextPatch: { reply },
         output: {
-          toneChanged: Boolean(context.reply?.draft && context.reply.draft !== draft),
-          toneNotes: draft ? '仅压缩多余空白，未新增事实或承诺。' : '无客户可见草稿，跳过润色。',
+          toneChanged: polished.changed,
+          toneNotes: polished.draft ? '已清理空确认和机械化等待表达，未新增事实或承诺。' : '无客户可见草稿，跳过润色。',
         },
       };
     },

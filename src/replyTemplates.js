@@ -521,6 +521,49 @@ function detailedExtraContent(replyContext = {}) {
   };
 }
 
+function joinReplyParts(...parts) {
+  return parts
+    .map((part) => String(part || '').trim())
+    .filter(Boolean)
+    .join('\n');
+}
+
+function humanReviewDraftContent(replyContext = {}) {
+  const shared = customerSharedInfoSummary(replyContext);
+  if (replyContext.hasAnyIdentifier && replyContext.hasEvidence) {
+    return {
+      content: `Hello, I’m sorry this has caused concern. I can see you already shared ${shared.en || 'the order information'} and the issue materials. I’ll review these details together first so we can confirm the next suitable solution accurately.`,
+      contentZh: `您好，很抱歉这件事给您带来困扰。我看到您已经提供了${shared.zh || '订单信息'}和问题素材，我这边会先结合这些信息一起核对，再确认下一步合适的处理方案。`,
+    };
+  }
+  if (replyContext.hasAnyIdentifier) {
+    return {
+      content: `Hello, I’m sorry this has caused concern. I can see you already shared ${shared.en || 'the order information'}. I’ll use that to check the case first; if you have photos, videos, screenshots, or platform messages that show the issue, feel free to send them too so I can review everything together.`,
+      contentZh: `您好，很抱歉这件事给您带来困扰。我看到您已经提供了${shared.zh || '订单信息'}。我这边会先按这些信息核对；如果有能展示问题的照片、视频、截图或平台消息，也可以一起发我，方便我完整对照。`,
+    };
+  }
+  if (replyContext.hasEvidence) {
+    return {
+      content: 'Hello, I’m sorry this has caused concern. I can see you have shared issue materials. Could you also send your order number or order email so I can match these details to the correct order and review the next suitable solution?',
+      contentZh: '您好，很抱歉这件事给您带来困扰。我看到您已经提供了问题素材，也麻烦您补充订单号或下单邮箱，我这边好对应到正确订单后继续核对下一步合适的处理方案。',
+    };
+  }
+  return {
+    content: 'Hello, I’m sorry this has caused concern. To help me check this accurately, could you please send your order number or order email, along with any photos, videos, screenshots, or platform messages that show the issue? I’ll review the details based on the information you provide.',
+    contentZh: '您好，很抱歉这件事给您带来困扰。为了准确核对，麻烦您发一下订单号或下单邮箱，以及能展示问题的照片、视频、截图或平台消息。我会根据您提供的信息继续确认。',
+  };
+}
+
+function recommendedReplyContent(contextualTemplate = null, replyContext = {}) {
+  const detailedExtra = detailedExtraContent(replyContext);
+  if (!contextualTemplate) return humanReviewDraftContent(replyContext);
+
+  return {
+    content: joinReplyParts(customerContent(contextualTemplate), detailedExtra.content),
+    contentZh: joinReplyParts(referenceContent(contextualTemplate), detailedExtra.contentZh),
+  };
+}
+
 function applyReplyStyle(content, {
   replyStyle,
   variant,
@@ -573,56 +616,25 @@ export function buildReplyCandidates({
   }
 
   if (action === 'blocked' || risk === 'high') {
+    const recommended = humanReviewDraftContent(replyContext);
     return alignReplyCandidates([
       makeCandidate({
-        candidateId: `BLOCKED-${category || 'HIGH'}-GUIDE-001`,
-        label: '人工处理建议',
-        variant: 'manual_guidance',
-        content: applyReplyStyle([
-          '该邮件已识别为高风险，请人工核对客户诉求、订单信息和平台规则后再回复。',
-          '回复时不要直接承诺退款、赔偿、改价、发货时间或平台纠纷处理结果。',
-        ].join('\n'), {
+        candidateId: `RECOMMENDED-${category || 'HIGH'}-001`,
+        label: '推荐回复',
+        variant: 'recommended',
+        content: applyReplyStyle(recommended.content, {
           replyStyle: agent.replyStyle,
-          variant: 'manual_guidance',
+          variant: 'recommended',
           action,
           risk,
         }),
-        contentZh: [
-          '该邮件已识别为高风险，请人工核对客户诉求、订单信息和平台规则后再回复。',
-          '回复时不要直接承诺退款、赔偿、改价、发货时间或平台纠纷处理结果。',
-        ].join('\n'),
+        contentZh: recommended.contentZh,
         action,
         risk,
         requiresReview: true,
-        sendable: false,
+        sendable: true,
         agent,
         replyContext,
-        language: 'zh',
-      }),
-      makeCandidate({
-        candidateId: `BLOCKED-${category || 'HIGH'}-HOLD-002`,
-        label: '客户沟通要点',
-        variant: 'internal_suggestion',
-        content: applyReplyStyle([
-          '内部要点：先确认客户具体诉求、订单号、下单邮箱、问题照片或视频。',
-          '如果信息缺失，可人工改写为索要信息的回复；不要发送“已收到，等人工回复”这类空确认。',
-        ].join('\n'), {
-          replyStyle: agent.replyStyle,
-          variant: 'internal_suggestion',
-          action,
-          risk,
-        }),
-        contentZh: [
-          '内部要点：先确认客户具体诉求、订单号、下单邮箱、问题照片或视频。',
-          '如果信息缺失，可人工改写为索要信息的回复；不要发送“已收到，等人工回复”这类空确认。',
-        ].join('\n'),
-        action,
-        risk,
-        requiresReview: true,
-        sendable: false,
-        agent,
-        replyContext,
-        language: 'en',
       }),
     ], customerLanguage);
   }
@@ -630,62 +642,19 @@ export function buildReplyCandidates({
   if (!contextualTemplate) return [];
 
   if (action === 'draft_only' || risk === 'medium') {
-    const conservative = conservativeContent(replyContext);
-    const detailedExtra = detailedExtraContent(replyContext);
+    const recommended = recommendedReplyContent(contextualTemplate, replyContext);
     return alignReplyCandidates([
       makeCandidate({
-        candidateId: `${contextualTemplate.templateId}-CONSERVATIVE`,
-        label: '保守版',
-        variant: 'conservative',
-        content: applyReplyStyle(conservative.content, {
+        candidateId: `${contextualTemplate.templateId}-RECOMMENDED`,
+        label: '推荐回复',
+        variant: 'recommended',
+        content: applyReplyStyle(recommended.content, {
           replyStyle: agent.replyStyle,
-          variant: 'conservative',
+          variant: 'recommended',
           action,
           risk,
         }),
-        contentZh: conservative.contentZh,
-        action,
-        risk,
-        requiresReview: true,
-        sendable: true,
-        agent,
-        replyContext,
-      }),
-      makeCandidate({
-        candidateId: `${contextualTemplate.templateId}-STANDARD`,
-        label: '标准版',
-        variant: 'standard',
-        content: applyReplyStyle(customerContent(contextualTemplate), {
-          replyStyle: agent.replyStyle,
-          variant: 'standard',
-          action,
-          risk,
-        }),
-        contentZh: referenceContent(contextualTemplate),
-        action,
-        risk,
-        requiresReview: true,
-        sendable: true,
-        agent,
-        replyContext,
-      }),
-      makeCandidate({
-        candidateId: `${contextualTemplate.templateId}-DETAILED`,
-        label: '详细版',
-        variant: 'detailed',
-        content: applyReplyStyle([
-          customerContent(contextualTemplate),
-          detailedExtra.content,
-        ].join('\n'), {
-          replyStyle: agent.replyStyle,
-          variant: 'detailed',
-          action,
-          risk,
-        }),
-        contentZh: [
-          referenceContent(contextualTemplate),
-          detailedExtra.contentZh,
-        ].join('\n'),
+        contentZh: recommended.contentZh,
         action,
         risk,
         requiresReview: true,
@@ -698,12 +667,12 @@ export function buildReplyCandidates({
 
   return alignReplyCandidates([
     makeCandidate({
-      candidateId: `${contextualTemplate.templateId}-STANDARD`,
-      label: '标准版',
-      variant: 'standard',
+      candidateId: `${contextualTemplate.templateId}-RECOMMENDED`,
+      label: '推荐回复',
+      variant: 'recommended',
       content: applyReplyStyle(customerContent(contextualTemplate), {
         replyStyle: agent.replyStyle,
-        variant: 'standard',
+        variant: 'recommended',
         action,
         risk,
       }),

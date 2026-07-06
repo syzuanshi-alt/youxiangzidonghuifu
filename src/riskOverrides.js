@@ -45,7 +45,8 @@ export function applyRiskOverrideToMail(mail = {}, override = null, { agentConfi
     reason,
     agentConfig,
   });
-  const standardCandidate = replyCandidates.find((candidate) => candidate.variant === 'standard');
+  const recommendedCandidate = replyCandidates.find((candidate) => candidate.variant === 'recommended')
+    || replyCandidates[0];
   const processingStatus = isManualLowRiskAutoReply(option, override)
     ? {
         status: 'completed',
@@ -65,7 +66,7 @@ export function applyRiskOverrideToMail(mail = {}, override = null, { agentConfi
     risk: option.risk,
     lane: LANE_BY_RISK[option.risk],
     requiresReview,
-    replyDraft: template ? (standardCandidate?.content || template.content) : '',
+    replyDraft: recommendedCandidate?.content || (template ? template.content : ''),
     replyCandidates,
     templateId: template ? template.templateId : null,
     templateSource: template ? 'riskOverride' : option.action === 'blocked' ? 'blocked' : option.action === 'ignore' ? 'spam' : 'riskOverride',

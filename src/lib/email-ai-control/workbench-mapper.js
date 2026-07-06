@@ -41,36 +41,14 @@ function customerLanguageCode(customerLanguage = {}) {
 function makeReplyCandidates(aiResult, action, risk, customerLanguage) {
   if (aiResult.spam?.isSpam || action === 'ignore') return [];
 
-  if (risk === 'high' || action === 'blocked') {
-    return [
-      {
-        candidateId: `EMAIL-AI-${aiResult.configVersionId || 'mock'}-INTERNAL`,
-        label: 'AI 内部处理建议',
-        variant: 'internal_suggestion',
-        content: aiResult.reply?.internalSuggestion || '高风险邮件需要人工核对后处理。',
-        editable: true,
-        sendable: false,
-        requiresReview: true,
-        action,
-        risk,
-        allowsRealSend: false,
-        agent: {
-          modelId: aiResult.model?.replyModel || 'local-mock-email-ai',
-          sourceStatus: 'email_ai_control_center',
-        },
-        language: 'zh',
-      },
-    ];
-  }
-
   const draft = aiResult.reply?.draft || '';
   if (!draft) return [];
 
   return [
     {
       candidateId: `EMAIL-AI-${aiResult.configVersionId || 'mock'}-DRAFT`,
-      label: 'AI 配置草稿',
-      variant: 'standard',
+      label: '推荐回复',
+      variant: 'recommended',
       content: draft,
       editable: true,
       sendable: true,
@@ -131,7 +109,7 @@ export function mapEmailAIResultToWorkbenchMail(mail = {}, aiResult = {}) {
   const risk = normalizedRisk.risk;
   const action = normalizedRisk.action;
   const replyCandidates = makeReplyCandidates(aiResult, action, risk, customerLanguage);
-  const primaryCandidate = replyCandidates.find((candidate) => candidate.variant === 'standard') || replyCandidates[0] || null;
+  const primaryCandidate = replyCandidates.find((candidate) => candidate.variant === 'recommended') || replyCandidates[0] || null;
 
   return {
     ...mail,

@@ -40,7 +40,7 @@ function pickReview(reviews, mail) {
 function defaultReplyContent(mail, selectedReplies) {
   return pickSelectedReply(selectedReplies, mail)
     || mail.replyDraft
-    || mail.replyCandidates?.find((candidate) => candidate.variant === 'standard')?.content
+    || mail.replyCandidates?.find((candidate) => candidate.variant === 'recommended')?.content
     || mail.replyCandidates?.[0]?.content
     || '';
 }

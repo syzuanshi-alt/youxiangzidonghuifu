@@ -123,9 +123,9 @@ const queueStatusText = {
 };
 
 const nextStepText = {
-  auto_reply: '低风险邮件，可使用候选回复；自动处理开关、原始来信人校验和限额满足后可自动发送。',
-  draft_only: '中风险邮件，只生成草稿，人工确认后再发送。',
-  blocked: '高风险或禁止场景，必须人工审批后才能发送人工确认内容。',
+  auto_reply: '低风险邮件，可使用推荐回复；自动处理开关、原始来信人校验和限额满足后可自动发送。',
+  draft_only: '中风险邮件，只生成推荐回复草稿，人工确认后再发送。',
+  blocked: '高风险或禁止场景，必须人工审批后才能发送人工确认后的推荐回复。',
   ignore: '白色垃圾/骚扰邮件，不回复；自动归档开关满足后可移箱。',
 };
 
@@ -1809,15 +1809,15 @@ function renderLaneBanner(mail) {
   const bannerMap = {
     low: {
       title: '绿色低风险',
-      text: '可使用可编辑候选回复；满足自动处理开关、原始来信人校验、限额和重复检查后可自动发送。',
+      text: '可使用可编辑推荐回复；满足自动处理开关、原始来信人校验、限额和重复检查后可自动发送。',
     },
     medium: {
       title: '橘色中风险',
-      text: '系统提供 3 条可编辑候选回复，必须人工选择或修改后再处理。',
+      text: '系统提供 1 条可编辑推荐回复，必须人工审核或修改后再处理。',
     },
     high: {
       title: '红色高风险',
-      text: '必须人工处理；系统给可编辑建议，审批后只能发送人工确认内容。',
+      text: '必须人工处理；系统给可编辑推荐回复，审批后只能发送人工确认内容。',
     },
     spam: {
       title: '白色垃圾邮件',
@@ -1846,14 +1846,14 @@ function selectedReplyCandidate(mail) {
 function buildSendDisabledReason({ write, selectedContent, needsApproval, approved, alreadyCompleted }) {
   if (alreadyCompleted) return '该邮件已经处理完成，为避免重复回复，发送按钮已锁定。';
   if (!write.sendEnabled) return '真实发送开关未开启。';
-  if (!selectedContent) return '请先选择或填写回复正文。';
+  if (!selectedContent) return '请先确认或填写推荐回复正文。';
   if (needsApproval && !approved) return '中高风险必须先审核通过。';
   return '已满足前端确认条件，服务端仍会校验原始来信人、限额和重复发送。';
 }
 
 function renderComposerSteps({ needsApproval, approved, sendDisabled }) {
   const steps = [
-    { label: '1 选回复', state: 'done', detail: '选择候选话术并可直接编辑。' },
+    { label: '1 确认回复', state: 'done', detail: '检查推荐回复并可直接编辑。' },
     {
       label: '2 审核',
       state: needsApproval ? (approved ? 'done' : 'active') : 'done',
@@ -1892,6 +1892,7 @@ function renderReplyComposer(mail) {
   const processingStatus = getWorkbenchProcessingStatus(mail);
   const alreadyCompleted = processingStatus.status === 'completed';
   const alreadyDeleted = processingStatus.status === 'deleted';
+  const needsApproval = mail.requiresReview || riskState.risk === 'medium' || riskState.urgent;
   const sendDisabled = alreadyCompleted || !write.sendEnabled || !selectedContent;
   const canArchive = riskState.spam || mail.manualArchive?.checked;
   const archiveDisabled = alreadyCompleted || (!write.archiveEnabled && !mail.manualArchive?.checked);
@@ -1903,7 +1904,7 @@ function renderReplyComposer(mail) {
         <h3>一步处理框</h3>
         <div class="empty-candidates">
           <strong>不生成回复内容</strong>
-          <span>${riskState.spam ? '该邮件建议通过手动归档确认处理。' : '当前场景没有可展示候选回复。'}</span>
+          <span>${riskState.spam ? '该邮件建议通过手动归档确认处理。' : '当前场景没有可展示推荐回复。'}</span>
         </div>
         ${canArchive ? `
           <div class="reply-composer-actions confirm-only-actions">
@@ -1933,14 +1934,11 @@ function renderReplyComposer(mail) {
     <section class="panel-section reply-composer-card">
       <h3>一步处理框</h3>
       <div class="reply-composer-fields enlarged-editor">
-        <label for="reply-candidate-select">选择自动回复内容</label>
-        <select id="reply-candidate-select" data-reply-candidate-select>
-          ${candidates.map((candidate) => `
-            <option value="${escapeHtml(candidate.candidateId)}" ${candidate.candidateId === selectedCandidateId ? 'selected' : ''}>
-              ${displayText(candidate.label)} · ${displayText(candidate.candidateId)}
-            </option>
-          `).join('')}
-        </select>
+        <input type="hidden" data-reply-candidate-select value="${escapeHtml(selectedCandidateId)}" />
+        <div class="reply-candidate-summary">
+          <strong>${displayText(selectedCandidate?.label || '推荐回复')}</strong>
+          <span>${needsApproval ? '人工审核后可发送' : '低风险通过服务端校验后可发送'}</span>
+        </div>
         <label for="reply-content-editor">回复正文，可直接编辑</label>
         <small class="reply-language-hint">客户回复默认跟随来信语言；中文只作为内部理解参考。</small>
         <textarea id="reply-content-editor" data-reply-editor>${displayText(selectedContent)}</textarea>
@@ -3972,7 +3970,7 @@ function saveReplyComposerSelection(mail, { silent = false } = {}) {
   const { candidateId, content } = readReplyComposer(mail);
 
   if (!candidateId && !riskState.spam) {
-    showActionNotice({ type: 'warn', title: '请选择回复内容', message: '发送或保存前需要先选择一条候选回复。' });
+    showActionNotice({ type: 'warn', title: '请确认推荐回复', message: '发送或保存前需要先确认推荐回复内容。' });
     return null;
   }
 
