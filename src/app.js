@@ -82,7 +82,7 @@ import {
   readJsonPayload,
 } from './httpResponse.js';
 
-const REPLY_DRAFT_SCHEMA_VERSION = 'component-fact-grounded-replies-v3';
+const REPLY_DRAFT_SCHEMA_VERSION = 'force-regenerate-fact-grounded-replies-v4';
 const REPLY_DRAFT_SCHEMA_VERSION_KEY = 'feishu-mail-reply-draft-schema-version';
 const CANDIDATE_SELECTIONS_KEY = 'feishu-mail-candidate-selections';
 
@@ -522,15 +522,19 @@ function saveReviews() {
 function loadCandidateSelections() {
   try {
     if (localStorage.getItem(REPLY_DRAFT_SCHEMA_VERSION_KEY) !== REPLY_DRAFT_SCHEMA_VERSION) {
-      localStorage.removeItem(CANDIDATE_SELECTIONS_KEY);
-      localStorage.removeItem(WORKBENCH_RISK_SNAPSHOTS_KEY);
-      localStorage.setItem(REPLY_DRAFT_SCHEMA_VERSION_KEY, REPLY_DRAFT_SCHEMA_VERSION);
+      purgeReplyDraftCacheForSchemaChange();
       return {};
     }
     return JSON.parse(localStorage.getItem(CANDIDATE_SELECTIONS_KEY) || '{}');
   } catch {
     return {};
   }
+}
+
+function purgeReplyDraftCacheForSchemaChange() {
+  localStorage.removeItem(CANDIDATE_SELECTIONS_KEY);
+  localStorage.removeItem(WORKBENCH_RISK_SNAPSHOTS_KEY);
+  localStorage.setItem(REPLY_DRAFT_SCHEMA_VERSION_KEY, REPLY_DRAFT_SCHEMA_VERSION);
 }
 
 function saveCandidateSelections() {
@@ -620,7 +624,16 @@ function saveRiskOverrides() {
 function loadRiskSnapshots() {
   try {
     const snapshots = JSON.parse(localStorage.getItem(WORKBENCH_RISK_SNAPSHOTS_KEY) || '{}');
-    return snapshots && typeof snapshots === 'object' ? snapshots : {};
+    if (!snapshots || typeof snapshots !== 'object' || Array.isArray(snapshots)) {
+      return {};
+    }
+    const compatibleSnapshots = Object.fromEntries(Object.entries(snapshots).filter(([, snapshot]) => (
+      snapshot?.replyDraftSchemaVersion === REPLY_DRAFT_SCHEMA_VERSION
+    )));
+    if (Object.keys(compatibleSnapshots).length !== Object.keys(snapshots).length) {
+      localStorage.setItem(WORKBENCH_RISK_SNAPSHOTS_KEY, JSON.stringify(compatibleSnapshots));
+    }
+    return compatibleSnapshots;
   } catch {
     return {};
   }

@@ -745,16 +745,17 @@ try {
     localStorage.setItem('feishu-mail-candidate-selections', JSON.stringify({
       'MAIL-MEDIUM': {
         candidateId: 'OLD-STANDARD',
-        content: '旧三版候选回复缓存',
+        content: '旧回复缓存：您好，请您补充订单号。',
       },
     }));
-    localStorage.setItem('feishu-mail-reply-draft-schema-version', 'single-recommended-v1');
+    localStorage.setItem('feishu-mail-reply-draft-schema-version', 'component-fact-grounded-replies-v3');
     localStorage.setItem('feishu-mail-risk-snapshots', JSON.stringify({
       'MAIL-MEDIUM': {
         risk: 'medium',
         action: 'draft_only',
-        replyDraft: '旧风险快照回复',
-        replyCandidates: [{ candidateId: 'OLD-SNAPSHOT', content: '旧风险快照回复' }],
+        replyDraft: '旧风险快照回复：您好，请您补充订单号。',
+        replyDraftSchemaVersion: 'component-fact-grounded-replies-v3',
+        replyCandidates: [{ candidateId: 'OLD-SNAPSHOT', content: '旧风险快照回复：您好，请您补充订单号。' }],
       },
     }));
     localStorage.removeItem('feishu-mail-rule-reviews');
@@ -787,12 +788,13 @@ try {
   assert.equal(storedSmsCodes, null);
   assert.equal(rememberedPhone, 'ops.team@example.com');
   assert.equal(await page.evaluate(() => localStorage.getItem('feishu-mail-candidate-selections')), null);
-  assert.equal(await page.evaluate(() => localStorage.getItem('feishu-mail-reply-draft-schema-version')), 'component-fact-grounded-replies-v3');
+  assert.equal(await page.evaluate(() => localStorage.getItem('feishu-mail-reply-draft-schema-version')), 'force-regenerate-fact-grounded-replies-v4');
   const refreshedRiskSnapshots = await page.evaluate(() => JSON.parse(localStorage.getItem('feishu-mail-risk-snapshots') || '{}'));
   assert.notEqual(JSON.stringify(refreshedRiskSnapshots).includes('OLD-SNAPSHOT'), true);
   assert.notEqual(JSON.stringify(refreshedRiskSnapshots).includes('旧风险快照回复'), true);
+  assert.notEqual(JSON.stringify(refreshedRiskSnapshots).includes('请您补充订单号'), true);
   Object.values(refreshedRiskSnapshots).forEach((snapshot) => {
-    assert.equal(snapshot.replyDraftSchemaVersion, 'component-fact-grounded-replies-v3');
+    assert.equal(snapshot.replyDraftSchemaVersion, 'force-regenerate-fact-grounded-replies-v4');
   });
   const blueTheme = await page.evaluate(() => {
     const rootStyle = getComputedStyle(document.documentElement);
